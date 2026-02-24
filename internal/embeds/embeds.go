@@ -19,7 +19,6 @@ const (
 var instagramPostTypes = []string{"/p/", "/reel/", "/reels/", "/tv/", "/stories/"}
 
 func handleMessage(message string) {
-
 	if strings.Contains(xDomain, message) {
 		message = strings.ReplaceAll(message, xDomain, vxTwitterDomain)
 	}
