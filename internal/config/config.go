@@ -1,7 +1,7 @@
 package config
 
 import (
-	"log"
+	"log/slog"
 	"os"
 
 	"github.com/joswayski/godis/internal/env"
@@ -16,10 +16,11 @@ func GetConfig() GodisConfig {
 
 	discordToken := os.Getenv("DISCORD_TOKEN")
 	if discordToken == "" {
-		log.Fatal("DISCORD_TOKEN not set!")
+		slog.Error("DISCORD_TOKEN not set!")
+		os.Exit(1)
 	}
 
-	log.Println("Config loaded!")
+	slog.Debug("Config loaded!")
 	return GodisConfig{
 		DiscordToken: discordToken,
 	}

@@ -1,14 +1,18 @@
 package main
 
 import (
-	"log"
+	"log/slog"
 
 	"github.com/joswayski/godis/internal/config"
+	"github.com/joswayski/godis/internal/logger"
 )
 
 func main() {
-	log.Println("Godis starting...")
+	logger.Init()
+	slog.Info("Godis is starting...")
 
 	config.GetConfig()
+
+	slog.Info("Godis is ready!")
 
 }

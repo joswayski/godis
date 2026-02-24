@@ -1,7 +1,7 @@
 package env
 
 import (
-	"log"
+	"log/slog"
 
 	"github.com/joho/godotenv"
 )
@@ -9,6 +9,6 @@ import (
 func GetEnv() {
 	err := godotenv.Load()
 	if err != nil {
-		log.Printf("Unable to get .env file!")
+		slog.Warn("Unable to get .env file!")
 	}
 }
