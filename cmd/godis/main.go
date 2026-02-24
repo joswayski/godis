@@ -7,9 +7,8 @@ import (
 )
 
 func main() {
-	log.Print("Yellow")
+	log.Println("Godis starting...")
 
 	config.GetConfig()
 
-	log.Println("Got token")
 }

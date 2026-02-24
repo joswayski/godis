@@ -19,6 +19,7 @@ func GetConfig() GodisConfig {
 		log.Fatal("DISCORD_TOKEN not set!")
 	}
 
+	log.Println("Config loaded!")
 	return GodisConfig{
 		DiscordToken: discordToken,
 	}
