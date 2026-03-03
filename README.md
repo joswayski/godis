@@ -2,7 +2,7 @@
 
 Helpful Discord bot! For now, replaces links in Discord so that video embeds work properly. I plan to add more functionality soon.
 
-<img src="./assets/godis.png" alt="godis" style="width: 200px;" />
+<img src="./assets/godis.png" alt="godis mascot" style="width: 200px;" />
 
 
 
@@ -12,7 +12,8 @@ Helpful Discord bot! For now, replaces links in Discord so that video embeds wor
 - `facebook.com` with `facebed.com`  
 - `instagram.com` with `eeinstagram.com`
 
-![linkreplacementdemo](./assets/linkreplacementdemo.gif)
+<img src="./assets/linkreplacement.gif" alt="godis demo" style="width: 700px;" />
+
 
 ### Prerequisites
 A `DISCORD_TOKEN` for a bot with the following:
