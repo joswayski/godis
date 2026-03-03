@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/joswayski/godis/internal/webhooks"
 )
 
 const (
@@ -24,7 +25,9 @@ const (
 var instagramPostTypes = []string{"/p/", "/reel/", "/reels/", "/tv/", "/stories/"}
 
 func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
-	slog.Info("Received message", "content", m.Message.Content, "author", m.Message.Author.Username)
+
+	slog.Info("Received message", "content", m.Message.Content, "author", m.Message.Author)
+
 	newMessage := m.Content
 	shouldRepublish := false
 	if strings.Contains(xDomain, newMessage) {
@@ -53,9 +56,36 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 
 	if shouldRepublish {
+		godisWebhook, err := webhooks.GetGodisWebhook(s, m)
+		if err != nil {
+			slog.Error("Godis webhook not found!", "error", err.Error())
+			return
+		}
+
+		// Use the server nickname if it's there
+		nameToUse := m.Member.Nick
+		if nameToUse == "" {
+			nameToUse = m.Member.User.GlobalName
+		}
+
+		if nameToUse == "" {
+			// This is always there
+			nameToUse = m.Author.Username
+		}
+
 		// Publish the updated message
+		s.WebhookExecute(godisWebhook.ID, godisWebhook.Token, true, &discordgo.WebhookParams{
+			Content:   newMessage,
+			AvatarURL: m.Author.AvatarURL(""),
+			// Don't re-ping if any tags
+			AllowedMentions: &discordgo.MessageAllowedMentions{},
+			Username:        nameToUse,
+			// TODO ?
+			// Files: m.Attachments,
+		})
 
 		// Delete the old one
+		s.ChannelMessageDelete(m.ChannelID, m.ID)
 	}
 
 }
