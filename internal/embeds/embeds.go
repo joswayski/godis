@@ -38,10 +38,10 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	nameToUse := ""
 	if m.Member != nil {
 		nameToUse = m.Member.Nick
-	}
 
-	if nameToUse == "" && m.Member.User != nil {
-		nameToUse = m.Member.User.GlobalName
+		if nameToUse == "" && m.Member.User != nil {
+			nameToUse = m.Member.User.GlobalName
+		}
 	}
 
 	if nameToUse == "" && m.Author != nil {

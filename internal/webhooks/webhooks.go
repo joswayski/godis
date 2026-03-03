@@ -11,6 +11,7 @@ const (
 	godisWebhookName = "Godis Webhook"
 )
 
+// TODO in the future, allow users to clear the cache
 type webhookCache struct {
 	itemsMu sync.RWMutex
 	// Key is the channel ID
