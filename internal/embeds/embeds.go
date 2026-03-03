@@ -30,22 +30,22 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	newMessage := m.Content
 	shouldRepublish := false
-	if strings.Contains(xDomain, newMessage) {
+	if strings.Contains(newMessage, xDomain) {
 		newMessage = strings.ReplaceAll(newMessage, xDomain, vxTwitterDomain)
 		shouldRepublish = true
 	}
 
-	if strings.Contains(twitterDomain, newMessage) {
+	if strings.Contains(newMessage, twitterDomain) {
 		newMessage = strings.ReplaceAll(newMessage, twitterDomain, vxTwitterDomain)
 		shouldRepublish = true
 	}
 
-	if strings.Contains(facebookDomain, newMessage) {
+	if strings.Contains(newMessage, facebookDomain) {
 		newMessage = strings.ReplaceAll(newMessage, facebookDomain, facebedDomain)
 		shouldRepublish = true
 	}
 
-	if strings.Contains(instagramDomain, newMessage) {
+	if strings.Contains(newMessage, instagramDomain) {
 		for _, postType := range instagramPostTypes {
 			if strings.Contains(newMessage, postType) {
 				newMessage = strings.ReplaceAll(newMessage, instagramDomain, instaBedDomain)
@@ -74,7 +74,7 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 		}
 
 		// Publish the updated message
-		s.WebhookExecute(godisWebhook.ID, godisWebhook.Token, true, &discordgo.WebhookParams{
+		_, err = s.WebhookExecute(godisWebhook.ID, godisWebhook.Token, true, &discordgo.WebhookParams{
 			Content:   newMessage,
 			AvatarURL: m.Author.AvatarURL(""),
 			// Don't re-ping if any tags
@@ -84,8 +84,16 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 			// Files: m.Attachments,
 		})
 
+		if err != nil {
+			slog.Error("Error publishing new message", "error", err.Error(), "content", newMessage, "author", m.Author)
+			return
+		}
+
 		// Delete the old one
-		s.ChannelMessageDelete(m.ChannelID, m.ID)
+		err = s.ChannelMessageDelete(m.ChannelID, m.ID)
+		if err != nil {
+			slog.Error("Error deleting old message", "error", err.Error(), "content", m.Content, "author", m.Author)
+		}
 	}
 
 }
