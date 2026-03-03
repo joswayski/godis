@@ -20,7 +20,6 @@ func main() {
 
 	slog.Info("Godis is ready!")
 
-	slog.Info("Discord token", "token", config.DiscordToken)
 	discord, err := discordgo.New("Bot " + config.DiscordToken)
 	if err != nil {
 		slog.Error("Error ocurred loading discord", "error", err.Error())
