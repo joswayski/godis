@@ -13,7 +13,7 @@ Helpful Discord bot! For now, replaces links in Discord so that video embeds wor
 - `instagram.com` with `eeinstagram.com`
 
 
-#### Prerequisites
+### Prerequisites
 A `DISCORD_TOKEN` for a bot with the following:
 
 - #### Scopes
@@ -23,11 +23,13 @@ A `DISCORD_TOKEN` for a bot with the following:
     - Manage Messages
     - Manage Webhooks
     - Send Messages
+- #### Message Content Intent
+    - This needs to be enabled at https://discord.com/developers/applications/YOUR_BOT_ID/bot
 
 
-#### Running
+### Running
 
-Create a `.env` file at the root, and `go run ./cmd/godis`
+Create a `.env` file at the root, and `go run .`
 ```bash
 {"time":"2026-02-24T12:29:20.323438+03:00","level":"INFO","msg":"Godis is starting..."}
 {"time":"2026-02-24T12:29:20.323658+03:00","level":"INFO","msg":"Godis is ready!"}

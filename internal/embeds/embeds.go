@@ -1,6 +1,11 @@
 package embeds
 
-import "strings"
+import (
+	"log/slog"
+	"strings"
+
+	"github.com/bwmarrin/discordgo"
+)
 
 const (
 
@@ -18,25 +23,39 @@ const (
 
 var instagramPostTypes = []string{"/p/", "/reel/", "/reels/", "/tv/", "/stories/"}
 
-func handleMessage(message string) {
-	if strings.Contains(xDomain, message) {
-		message = strings.ReplaceAll(message, xDomain, vxTwitterDomain)
+func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
+	slog.Info("Received message", "content", m.Message.Content, "author", m.Message.Author.Username)
+	newMessage := m.Content
+	shouldRepublish := false
+	if strings.Contains(xDomain, newMessage) {
+		newMessage = strings.ReplaceAll(newMessage, xDomain, vxTwitterDomain)
+		shouldRepublish = true
 	}
 
-	if strings.Contains(twitterDomain, message) {
-		message = strings.ReplaceAll(message, twitterDomain, vxTwitterDomain)
+	if strings.Contains(twitterDomain, newMessage) {
+		newMessage = strings.ReplaceAll(newMessage, twitterDomain, vxTwitterDomain)
+		shouldRepublish = true
 	}
 
-	if strings.Contains(facebookDomain, message) {
-		message = strings.ReplaceAll(message, facebookDomain, facebedDomain)
+	if strings.Contains(facebookDomain, newMessage) {
+		newMessage = strings.ReplaceAll(newMessage, facebookDomain, facebedDomain)
+		shouldRepublish = true
 	}
 
-	if strings.Contains(instagramDomain, message) {
+	if strings.Contains(instagramDomain, newMessage) {
 		for _, postType := range instagramPostTypes {
-			if strings.Contains(message, postType) {
-				message = strings.ReplaceAll(message, instagramDomain, instaBedDomain)
+			if strings.Contains(newMessage, postType) {
+				newMessage = strings.ReplaceAll(newMessage, instagramDomain, instaBedDomain)
+				shouldRepublish = true
 				break
 			}
 		}
 	}
+
+	if shouldRepublish {
+		// Publish the updated message
+
+		// Delete the old one
+	}
+
 }
