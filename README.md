@@ -12,6 +12,7 @@ Helpful Discord bot! For now, replaces links in Discord so that video embeds wor
 - `facebook.com` with `facebed.com`  
 - `instagram.com` with `eeinstagram.com`
 
+![linkreplacementdemo](./assets/linkreplacementdemo.gif)
 
 ### Prerequisites
 A `DISCORD_TOKEN` for a bot with the following:

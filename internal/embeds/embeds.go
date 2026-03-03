@@ -35,13 +35,16 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 
 	// Use the server nickname if it's there
-	nameToUse := m.Member.Nick
+	nameToUse := ""
+	if m.Member != nil {
+		nameToUse = m.Member.Nick
+	}
 
-	if nameToUse == "" {
+	if nameToUse == "" && m.Member.User != nil {
 		nameToUse = m.Member.User.GlobalName
 	}
 
-	if nameToUse == "" {
+	if nameToUse == "" && m.Author != nil {
 		// This is always there
 		nameToUse = m.Author.Username
 	}
@@ -51,8 +54,12 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 		Content:   newMessage,
 		AvatarURL: m.Author.AvatarURL(""),
 		// Don't re-ping if any tags
-		AllowedMentions: &discordgo.MessageAllowedMentions{},
-		Username:        nameToUse,
+		AllowedMentions: &discordgo.MessageAllowedMentions{
+			Parse: []discordgo.AllowedMentionType{},
+			Roles: []string{},
+			Users: []string{},
+		},
+		Username: nameToUse,
 		// TODO ?
 		// Files: m.Attachments,
 	})
