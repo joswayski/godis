@@ -1,8 +1,11 @@
 package embeds
 
 import (
+	"io"
 	"log/slog"
+	"net/http"
 	"regexp"
+	"sync"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/joswayski/godis/internal/webhooks"
@@ -49,6 +52,40 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 		nameToUse = m.Author.Username
 	}
 
+	// Download all the files
+	var allFiles []*discordgo.File
+	var closers []io.Closer
+	var fileMu sync.Mutex
+	var fileWg sync.WaitGroup
+
+	for _, attachment := range m.Attachments {
+		fileWg.Add(1)
+		go func(atch *discordgo.MessageAttachment) {
+			response, err := http.Get(attachment.URL)
+			if err != nil {
+				slog.Error("Error downloading file", "attachment", attachment)
+				return
+			}
+
+			if response.StatusCode != http.StatusOK {
+				response.Body.Close()
+				slog.Error("Non 200 status code downloading file", "status", response.Status, "attachment", attachment)
+				return
+			}
+
+			fileMu.Lock()
+			closers = append(closers, response.Body)
+			allFiles = append(allFiles, &discordgo.File{
+				Name:        attachment.Filename,
+				ContentType: attachment.ContentType,
+				Reader:      response.Body,
+			})
+			fileMu.Unlock()
+		}(attachment)
+	}
+
+	fileWg.Wait()
+
 	// Publish the updated message
 	_, err = s.WebhookExecute(godisWebhook.ID, godisWebhook.Token, true, &discordgo.WebhookParams{
 		Content:   newMessage,
@@ -59,10 +96,15 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 			Roles: []string{},
 			Users: []string{},
 		},
-		Username: nameToUse,
-		// TODO ?
-		// Files: m.Attachments,
+		Components: m.Components,
+		Username:   nameToUse,
+		Files:      allFiles,
 	})
+
+	// Close the file bodies from earlier
+	for _, closer := range closers {
+		closer.Close()
+	}
 
 	if err != nil {
 		slog.Error("Error publishing new message", "error", err.Error(), "content", newMessage, "author", m.Author)
