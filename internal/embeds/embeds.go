@@ -61,6 +61,7 @@ func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
 	for _, attachment := range m.Attachments {
 		fileWg.Add(1)
 		go func(atch *discordgo.MessageAttachment) {
+			defer fileWg.Done()
 			response, err := http.Get(atch.URL)
 			if err != nil {
 				slog.Error("Error downloading file", "attachment", atch)
