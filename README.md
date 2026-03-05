@@ -33,6 +33,6 @@ A `DISCORD_TOKEN` for a bot with the following:
 
 Create a `.env` file at the root, and `go run .`
 ```bash
-{"time":"2026-02-24T12:29:20.323438+03:00","level":"INFO","msg":"Godis is starting..."}
-{"time":"2026-02-24T12:29:20.323658+03:00","level":"INFO","msg":"Godis is ready!"}
+{"time":"2026-03-05T23:40:42.338935+03:00","level":"INFO","msg":"Godis is starting..."}
+{"time":"2026-03-05T23:40:44.818278+03:00","level":"INFO","msg":"Godis is ready waiting for messages!"}
 ```

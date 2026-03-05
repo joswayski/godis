@@ -98,3 +98,17 @@ func GetGodisWebhook(s *discordgo.Session, m *discordgo.MessageCreate) (*discord
 	return newWebhook, nil
 
 }
+
+// Used for checking own selfpoast
+func IsGodisWebhook(webhookID string) bool {
+	wbhkCache.itemsMu.RLock()
+	defer wbhkCache.itemsMu.RUnlock()
+
+	for _, wbhk := range wbhkCache.items {
+		if wbhk.ID == webhookID {
+			return true
+		}
+	}
+
+	return false
+}
