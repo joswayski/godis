@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/joswayski/godis/internal/messages"
 	"github.com/joswayski/godis/internal/webhooks"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
@@ -23,13 +24,43 @@ func (g *Godis) HandleReplies(s *discordgo.Session, m *discordgo.MessageCreate) 
 	}
 
 	params := responses.ResponseNewParams{
-		Model:        g.Config.AIApiModels[0], // TODO allow fallbacks
-		Input:        responses.ResponseNewParamsInputUnion{OfString: openai.String(m.Author.Username + ": " + m.Content)},
-		Instructions: openai.String(g.Config.AISystemPrompt),
+		// https://openrouter.ai/docs/api/reference/responses/basic-usage
+		Model:           g.Config.AIApiModels[0], // TODO allow fallbacks
+		Instructions:    openai.String(g.Config.AISystemPrompt),
+		MaxOutputTokens: openai.Int(1500), // TODO param?
+
 	}
 
+	var inputItems responses.ResponseInputParam
+
+	// TODO streaming responses, chat indicator
 	// Give it context
-	s.ChannelMessages(m.ChannelID, 20, "", "", "")
+	history, err := s.ChannelMessages(m.ChannelID, 20, "", "", "")
+
+	if err != nil {
+		slog.Error("Error fetching channel history", "error", err.Error())
+	}
+
+	// Messages come newest first, so reverse it
+	for i := len(history) - 1; i >= 0; i-- {
+		msg := history[i]
+		role := responses.EasyInputMessageRoleUser
+		content := messages.GetContent(msg)
+		// TODO get files
+
+		// Our own messages
+		if msg.Author.ID == s.State.User.ID {
+			role = responses.EasyInputMessageRoleAssistant
+			content = msg.Content
+		}
+
+		inputItems = append(inputItems, responses.ResponseInputItemParamOfMessage(content, role))
+	}
+
+	// Add the latest message to the end
+	inputItems = append(inputItems, responses.ResponseInputItemParamOfMessage(messages.GetContent(m.Message), responses.EasyInputMessageRoleUser))
+
+	params.Input = responses.ResponseNewParamsInputUnion{OfInputItemList: inputItems}
 
 	response, err := g.AIClient.Responses.New(context.TODO(), params)
 

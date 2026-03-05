@@ -5,7 +5,7 @@ import (
 	"regexp"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/joswayski/godis/internal/files"
+	"github.com/joswayski/godis/internal/messages"
 	"github.com/joswayski/godis/internal/webhooks"
 )
 
@@ -33,23 +33,10 @@ func (g *Godis) HandleEmbeds(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
-	// Use the server nickname if it's there
-	nameToUse := ""
-	if m.Member != nil {
-		nameToUse = m.Member.Nick
-
-		if nameToUse == "" && m.Member.User != nil {
-			nameToUse = m.Member.User.GlobalName
-		}
-	}
-
-	if nameToUse == "" && m.Author != nil {
-		// This is always there
-		nameToUse = m.Author.Username
-	}
+	nameToUse := messages.GetUsername(m.Message)
 
 	// Download all the files
-	allFiles, closers := files.GetFilesInMessage(m)
+	allFiles, closers := messages.GetFilesInMessage(m)
 
 	// Publish the updated message
 	_, err = s.WebhookExecute(godisWebhook.ID, godisWebhook.Token, true, &discordgo.WebhookParams{
