@@ -16,7 +16,9 @@ func (g *Godis) HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) 
 	go g.HandleEmbeds(s, m)
 
 	if g.Config.AIEnabled {
-		go g.HandleReplies(s, m)
+		if g.Config.AIAllowedServers[m.GuildID] && g.Config.AIAllowedChannels[m.ChannelID] {
+			go g.HandleReplies(s, m)
+		}
 	}
 
 }
