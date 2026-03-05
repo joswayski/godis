@@ -3,20 +3,24 @@ package config
 import (
 	"log/slog"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/joswayski/godis/internal/env"
 )
 
+const defaultAINumberOfMessagesInHistory = 20
+
 type GodisConfig struct {
-	DiscordToken      string
-	AIApiKey          string
-	AIApiBaseUrl      string
-	AIApiModels       []string
-	AIAllowedServers  map[string]bool
-	AIAllowedChannels map[string]bool // These are globally unique
-	AISystemPrompt    string
-	AIEnabled         bool
+	DiscordToken                string
+	AIApiKey                    string
+	AIApiBaseUrl                string
+	AIApiModels                 []string
+	AIAllowedServers            map[string]bool
+	AIAllowedChannels           map[string]bool // These are globally unique
+	AISystemPrompt              string
+	AIEnabled                   bool
+	AINumberOfMessagesInHistory int
 }
 
 func GetConfig() GodisConfig {
@@ -89,15 +93,23 @@ func GetConfig() GodisConfig {
 		aiEnabled = false
 	}
 
+	aiNumberOfMessagesInHistory, err := strconv.Atoi(os.Getenv("AI_NUMBER_OF_MESSAGES_IN_HISTORY"))
+	if err != nil {
+		slog.Warn("Invalid AI_NUMBER_OF_MESSAGES_IN_HISTORY detected, will be using the default", "value", aiNumberOfMessagesInHistory)
+
+		aiNumberOfMessagesInHistory = defaultAINumberOfMessagesInHistory
+	}
+
 	slog.Debug("Config loaded!")
 	return GodisConfig{
-		DiscordToken:      discordToken,
-		AIApiKey:          aiApiKey,
-		AIAllowedServers:  aiAllowedServers,
-		AIAllowedChannels: aiAllowedChannels,
-		AISystemPrompt:    aiSystemPrompt,
-		AIEnabled:         aiEnabled,
-		AIApiBaseUrl:      aiApiBaseUrl,
-		AIApiModels:       aiApiModels,
+		DiscordToken:                discordToken,
+		AIApiKey:                    aiApiKey,
+		AIAllowedServers:            aiAllowedServers,
+		AIAllowedChannels:           aiAllowedChannels,
+		AISystemPrompt:              aiSystemPrompt,
+		AIEnabled:                   aiEnabled,
+		AIApiBaseUrl:                aiApiBaseUrl,
+		AIApiModels:                 aiApiModels,
+		AINumberOfMessagesInHistory: aiNumberOfMessagesInHistory,
 	}
 }

@@ -1,13 +1,11 @@
 package godis
 
 import (
-	"io"
 	"log/slog"
-	"net/http"
 	"regexp"
-	"sync"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/joswayski/godis/internal/files"
 	"github.com/joswayski/godis/internal/webhooks"
 )
 
@@ -51,39 +49,7 @@ func (g *Godis) HandleEmbeds(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 
 	// Download all the files
-	var allFiles []*discordgo.File
-	var closers []io.Closer
-	var fileMu sync.Mutex
-	var fileWg sync.WaitGroup
-
-	for _, attachment := range m.Attachments {
-		fileWg.Add(1)
-		go func(atch *discordgo.MessageAttachment) {
-			defer fileWg.Done()
-			response, err := http.Get(atch.URL)
-			if err != nil {
-				slog.Error("Error downloading file", "attachment", atch)
-				return
-			}
-
-			if response.StatusCode != http.StatusOK {
-				response.Body.Close()
-				slog.Error("Non 200 status code downloading file", "status", response.Status, "attachment", atch)
-				return
-			}
-
-			fileMu.Lock()
-			closers = append(closers, response.Body)
-			allFiles = append(allFiles, &discordgo.File{
-				Name:        atch.Filename,
-				ContentType: atch.ContentType,
-				Reader:      response.Body,
-			})
-			fileMu.Unlock()
-		}(attachment)
-	}
-
-	fileWg.Wait()
+	allFiles, closers := files.GetFilesInMessage(m)
 
 	// Publish the updated message
 	_, err = s.WebhookExecute(godisWebhook.ID, godisWebhook.Token, true, &discordgo.WebhookParams{

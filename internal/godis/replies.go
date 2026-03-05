@@ -12,9 +12,6 @@ import (
 )
 
 func (g *Godis) HandleReplies(s *discordgo.Session, m *discordgo.MessageCreate) {
-
-	// slog.Info("Received message in reply handler", "message", m)
-
 	if m.WebhookID != "" && webhooks.IsGodisWebhook(m.WebhookID) {
 		// if it was a self poast from the embed replacements, ignore it
 		return
@@ -32,13 +29,7 @@ func (g *Godis) HandleReplies(s *discordgo.Session, m *discordgo.MessageCreate) 
 	}
 
 	// Give it context
-	g.lastResponseMu.RLock()
-	previousResponseId := g.LastResponseIDs[m.ChannelID]
-	g.lastResponseMu.RUnlock()
-
-	if previousResponseId != "" {
-		params.PreviousResponseID = openai.String(previousResponseId)
-	}
+	s.ChannelMessages(m.ChannelID, 20, "", "", "")
 
 	response, err := g.AIClient.Responses.New(context.TODO(), params)
 
@@ -52,10 +43,6 @@ func (g *Godis) HandleReplies(s *discordgo.Session, m *discordgo.MessageCreate) 
 	if len(response.Output) == 0 || strings.Contains(response.OutputText(), "NO_RESPONSE") {
 		return
 	}
-
-	g.lastResponseMu.Lock()
-	g.LastResponseIDs[m.ChannelID] = response.ID
-	g.lastResponseMu.Unlock()
 
 	_, err = s.ChannelMessageSend(m.ChannelID, response.OutputText())
 
