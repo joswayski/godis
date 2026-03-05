@@ -1,4 +1,4 @@
-package embeds
+package godis
 
 import (
 	"io"
@@ -17,7 +17,7 @@ var (
 	instagramRegex = regexp.MustCompile(`https?://(?:[a-zA-Z0-9-]+\.)?instagram\.com(/(?:p|reel|reels|tv|stories)/[^\s]*)`)
 )
 
-func HandleEmbeds(s *discordgo.Session, m *discordgo.MessageCreate) {
+func (g *Godis) HandleEmbeds(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	newMessage := m.Content
 	newMessage = xitterRegex.ReplaceAllString(newMessage, "https://vxtwitter.com$1")
