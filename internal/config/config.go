@@ -13,6 +13,7 @@ type GodisConfig struct {
 	OpenRouterToken   string
 	AIAllowedServers  map[string]bool
 	AIAllowedChannels map[string]bool // These are globally unique
+	AISystemPrompt    string
 }
 
 func GetConfig() GodisConfig {
@@ -29,7 +30,7 @@ func GetConfig() GodisConfig {
 		slog.Warn("OPENROUTER_TOKEN not set! AI capabilities will be disabled.")
 	}
 
-	aiAllowedServersList := os.Getenv("AI_ALLOWED_SERVERS")
+	aiAllowedServersList := os.Getenv("AI_ALLOWED_SERVERS") // TODO in the future, allow "ALL" as an input
 	if aiAllowedServersList == "" {
 		slog.Warn("No servers have been specified. AI features will be disabled!")
 	}
@@ -42,7 +43,7 @@ func GetConfig() GodisConfig {
 		}
 	}
 
-	aiAllowedChannelsList := os.Getenv("AI_ALLOWED_CHANNELS")
+	aiAllowedChannelsList := os.Getenv("AI_ALLOWED_CHANNELS") // TODO in the future, allow "ALL" as an input
 	if aiAllowedChannelsList == "" {
 		slog.Warn("No channels have been specified. AI features will be disabled!")
 	}
@@ -55,7 +56,10 @@ func GetConfig() GodisConfig {
 		}
 	}
 
-	// TODO in the future, allow "ALL" as an input
+	aiSystemPrompt := os.Getenv("AI_SYSTEM_PROMPT")
+	if aiSystemPrompt == "" {
+		slog.Warn("No AI_SYSTEM_PROMPT detected. AI features will be disabled!")
+	}
 
 	slog.Debug("Config loaded!")
 	return GodisConfig{
@@ -63,5 +67,6 @@ func GetConfig() GodisConfig {
 		OpenRouterToken:   openRouterToken,
 		AIAllowedServers:  aiAllowedServers,
 		AIAllowedChannels: aiAllowedChannels,
+		AISystemPrompt:    aiSystemPrompt,
 	}
 }

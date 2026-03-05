@@ -8,7 +8,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/joswayski/godis/internal/config"
-	"github.com/joswayski/godis/internal/embeds"
+	"github.com/joswayski/godis/internal/godis"
 	"github.com/joswayski/godis/internal/logger"
 )
 
@@ -16,17 +16,17 @@ func main() {
 	logger.Init()
 	slog.Info("Godis is starting...")
 
-	config := config.GetConfig()
+	bot := &godis.Godis{
+		Config: config.GetConfig(),
+	}
 
-	slog.Info("Godis is ready!")
-
-	discord, err := discordgo.New("Bot " + config.DiscordToken)
+	discord, err := discordgo.New("Bot " + bot.Config.DiscordToken)
 	if err != nil {
 		slog.Error("Error ocurred loading discord", "error", err.Error())
 		os.Exit(1)
 	}
 
-	discord.AddHandler(embeds.HandleMessage)
+	discord.AddHandler(bot.HandleMessage)
 
 	discord.Identify.Intents = discordgo.IntentsGuildMessages | discordgo.IntentMessageContent
 

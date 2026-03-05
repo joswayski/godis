@@ -17,9 +17,7 @@ var (
 	instagramRegex = regexp.MustCompile(`https?://(?:[a-zA-Z0-9-]+\.)?instagram\.com(/(?:p|reel|reels|tv|stories)/[^\s]*)`)
 )
 
-func HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
-
-	slog.Info("Received message", "content", m.Message.Content, "author", m.Message.Author)
+func HandleEmbeds(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	newMessage := m.Content
 	newMessage = xitterRegex.ReplaceAllString(newMessage, "https://vxtwitter.com$1")
