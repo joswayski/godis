@@ -7,6 +7,7 @@ import (
 	"syscall"
 
 	"github.com/bwmarrin/discordgo"
+	ai "github.com/joswayski/godis/internal/clients"
 	"github.com/joswayski/godis/internal/config"
 	"github.com/joswayski/godis/internal/godis"
 	"github.com/joswayski/godis/internal/logger"
@@ -16,8 +17,10 @@ func main() {
 	logger.Init()
 	slog.Info("Godis is starting...")
 
+	godisCfg := config.GetConfig()
 	bot := &godis.Godis{
-		Config: config.GetConfig(),
+		Config:   godisCfg,
+		AIClient: ai.CreateClient(godisCfg),
 	}
 
 	discord, err := discordgo.New("Bot " + bot.Config.DiscordToken)
@@ -38,8 +41,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	slog.Info("Godis is ready waiting for messages!")
+
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, os.Interrupt)
+
 	<-sc
 
 	slog.Info("Shutting down Godis!")
