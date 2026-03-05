@@ -71,7 +71,7 @@ func (g *Godis) HandleReplies(s *discordgo.Session, m *discordgo.MessageCreate) 
 
 	slog.Info("response", "response", response)
 
-	if len(response.Output) == 0 || strings.Contains(response.OutputText(), "NO_RESPONSE") {
+	if len(response.Output) == 0 || strings.Contains(strings.ToLower(response.OutputText()), "no_response") {
 		return
 	}
 
