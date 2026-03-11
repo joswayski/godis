@@ -100,9 +100,9 @@ func (g *Godis) HandleReplies(s *discordgo.Session, m *discordgo.MessageCreate) 
 		return
 	}
 
+	// Add channel typing indicator
 	s.ChannelTyping(m.ChannelID)
-
-	jitter := time.Duration(rand.IntN(2000)+500) * time.Millisecond // 500ms–2500ms
+	jitter := time.Duration(rand.IntN(2000)+100) * time.Millisecond
 	time.Sleep(jitter)
 
 	_, err = s.ChannelMessageSend(m.ChannelID, response.OutputText())
