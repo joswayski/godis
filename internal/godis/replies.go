@@ -3,6 +3,7 @@ package godis
 import (
 	"context"
 	"log/slog"
+	"math/rand/v2"
 	"strings"
 	"time"
 
@@ -11,6 +12,8 @@ import (
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/responses"
 )
+
+// https://developers.openai.com/api/reference/go/
 
 func (g *Godis) HandleReplies(s *discordgo.Session, m *discordgo.MessageCreate) {
 	slog.Info("Message handling in replies", "message", m)
@@ -54,18 +57,12 @@ func (g *Godis) HandleReplies(s *discordgo.Session, m *discordgo.MessageCreate) 
 
 	var inputItems responses.ResponseInputParam
 
-	// TODO streaming responses, chat indicator
 	// Give it context of the messages before our current one
 	history, err := s.ChannelMessages(m.ChannelID, g.Config.AINumberOfMessagesInHistory, m.ID, "", "")
 
 	if err != nil {
 		slog.Error("Error fetching channel history", "error", err.Error())
 	}
-
-	// for i, v := range history {
-	// 	slog.Info("New message", "num", i+1, "content", v.Content)
-	// 	return
-	// }
 
 	// Messages come newest first, so reverse it
 	for i := len(history) - 1; i >= 0; i-- {
@@ -85,7 +82,6 @@ func (g *Godis) HandleReplies(s *discordgo.Session, m *discordgo.MessageCreate) 
 
 	// Add our newest message to the end
 	inputItems = append(inputItems, responses.ResponseInputItemParamOfMessage(messages.GetContent(currentMsg), responses.EasyInputMessageRoleUser))
-
 	for i, inputitem := range inputItems {
 		slog.Info("Input item message", "num", i+1, "content", inputitem)
 	}
@@ -99,11 +95,15 @@ func (g *Godis) HandleReplies(s *discordgo.Session, m *discordgo.MessageCreate) 
 		return
 	}
 
-	slog.Info("response", "response", response.ToolChoice)
-
 	if len(response.Output) == 0 || strings.Contains(strings.ToLower(response.OutputText()), "no_response") {
+		// TODO use tools instead
 		return
 	}
+
+	s.ChannelTyping(m.ChannelID)
+
+	jitter := time.Duration(rand.IntN(2000)+500) * time.Millisecond // 500ms–2500ms
+	time.Sleep(jitter)
 
 	_, err = s.ChannelMessageSend(m.ChannelID, response.OutputText())
 
