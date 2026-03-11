@@ -68,23 +68,16 @@ func (g *Godis) HandleReplies(s *discordgo.Session, m *discordgo.MessageCreate) 
 	for i := len(history) - 1; i >= 0; i-- {
 		msg := history[i]
 		role := responses.EasyInputMessageRoleUser
-		content := messages.GetContent(msg)
-		// TODO get files
-
 		// Our own messages
 		if msg.Author.ID == s.State.User.ID {
 			role = responses.EasyInputMessageRoleAssistant
-			content = msg.Content
 		}
 
-		inputItems = append(inputItems, responses.ResponseInputItemParamOfMessage(content, role))
+		inputItems = append(inputItems, buildInputItem(msg, role))
 	}
 
 	// Add our newest message to the end
-	inputItems = append(inputItems, responses.ResponseInputItemParamOfMessage(messages.GetContent(currentMsg), responses.EasyInputMessageRoleUser))
-	for i, inputitem := range inputItems {
-		slog.Info("Input item message", "num", i+1, "content", inputitem)
-	}
+	inputItems = append(inputItems, buildInputItem(currentMsg, responses.EasyInputMessageRoleUser))
 
 	params.Input = responses.ResponseNewParamsInputUnion{OfInputItemList: inputItems}
 
@@ -124,4 +117,40 @@ func shouldRefetchForEmbeds(msg *discordgo.Message) bool {
 
 	// If it has a link, we should wait and get the message again
 	return strings.Contains(msg.Content, "http://") || strings.Contains(msg.Content, "https://")
+}
+
+func buildInputItem(msg *discordgo.Message, role responses.EasyInputMessageRole) responses.ResponseInputItemUnionParam {
+	content := messages.GetContent(msg)
+
+	if len(msg.Attachments) == 0 {
+		return responses.ResponseInputItemParamOfMessage(content, role)
+	}
+
+	// Handle messages with attachments
+	// First add the text / user / timestamp
+	parts := responses.ResponseInputMessageContentListParam{
+		responses.ResponseInputContentParamOfInputText(content),
+	}
+
+	for _, att := range msg.Attachments {
+		if strings.HasPrefix(att.ContentType, "image/") {
+			parts = append(parts, responses.ResponseInputContentUnionParam{
+				OfInputImage: &responses.ResponseInputImageParam{
+					ImageURL: openai.String(att.URL),
+					Detail:   responses.ResponseInputImageDetailAuto,
+				},
+			})
+		} else {
+			// All other files
+			parts = append(parts, responses.ResponseInputContentUnionParam{
+				OfInputFile: &responses.ResponseInputFileParam{
+					FileURL:  openai.String(att.URL),
+					Filename: openai.String(att.Filename),
+				},
+			})
+		}
+	}
+
+	return responses.ResponseInputItemParamOfMessage(parts, role)
+
 }

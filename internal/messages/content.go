@@ -1,28 +1,34 @@
 package messages
 
 import (
+	"strings"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
 
 func GetContent(m *discordgo.Message) string {
-	content := GetUsername(m) + ": " + m.Content + " - Timestamp: " + m.Timestamp.Format(time.RFC3339)
+	var b strings.Builder
+	b.WriteString(GetUsername(m))
+	b.WriteString(": ")
+	b.WriteString(m.Content)
+	b.WriteString(" - Timestamp: ")
+	b.WriteString(m.Timestamp.Format(time.RFC3339))
 
-
-	// TODO this may be empty
 	for _, embed := range m.Embeds {
 		if embed.Title != "" {
-			content += " - [Link: Title: " + embed.Title
+			b.WriteString(" - [Link: Title: ")
+			b.WriteString(embed.Title)
 		}
 
 		if embed.Description != "" {
-			content += " - Description: " + embed.Description
+			b.WriteString(" - Description: ")
+			b.WriteString(embed.Description)
 		}
 
 		if embed.Title != "" {
-			content += "]"
+			b.WriteString("]")
 		}
 	}
-	return content
+	return b.String()
 }
