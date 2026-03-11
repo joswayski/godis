@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 )
 
 const defaultAINumberOfMessagesInHistory = 20
+const defaultAIMaxOutputTokens = 1000
 
 type GodisConfig struct {
 	DiscordToken                string
@@ -21,6 +23,7 @@ type GodisConfig struct {
 	AISystemPrompt              string
 	AIEnabled                   bool
 	AINumberOfMessagesInHistory int
+	AIMaxOutputTokens           int
 }
 
 func GetConfig() GodisConfig {
@@ -95,12 +98,28 @@ func GetConfig() GodisConfig {
 
 	aiNumberOfMessagesInHistory, err := strconv.Atoi(os.Getenv("AI_NUMBER_OF_MESSAGES_IN_HISTORY"))
 	if err != nil {
-		slog.Warn("Invalid AI_NUMBER_OF_MESSAGES_IN_HISTORY detected, will be using the default", "value", aiNumberOfMessagesInHistory)
-
+		slog.Warn("Invalid AI_NUMBER_OF_MESSAGES_IN_HISTORY detected, will be using the default", "value", defaultAINumberOfMessagesInHistory)
 		aiNumberOfMessagesInHistory = defaultAINumberOfMessagesInHistory
 	}
 
-	slog.Debug("Config loaded!")
+	if aiNumberOfMessagesInHistory > 100 { // todo make param
+		slog.Warn(fmt.Sprintf("AI_NUMBER_OF_MESSAGES_IN_HISTORY is greater than 100 (received %d), limiting to %d to keep costs low.", aiNumberOfMessagesInHistory, defaultAINumberOfMessagesInHistory))
+		aiNumberOfMessagesInHistory = 100
+	}
+
+	aiMaxOutputTokens, err := strconv.Atoi(os.Getenv("AI_MAX_OUTPUT_TOKENS"))
+	if err != nil {
+		slog.Warn("Invalid AI_MAX_OUTPUT_TOKENS detected, will be using the default", "value", defaultAIMaxOutputTokens)
+		aiMaxOutputTokens = defaultAIMaxOutputTokens
+	}
+
+	if aiMaxOutputTokens > 1500 {
+		slog.Warn(fmt.Sprintf("AI_MAX_OUTPUT_TOKENS is greater than 1500 (received %d) limiting to %d to make sure messages fit in the Discord limit. ", aiMaxOutputTokens, defaultAIMaxOutputTokens))
+		aiMaxOutputTokens = defaultAIMaxOutputTokens
+	}
+
+	slog.Info("Config Loaded!", "ai_enabled", aiEnabled, "ai_allowed_servers", aiAllowedServers, "ai_allowed_channels", aiAllowedChannels, "ai_base_url", aiApiBaseUrl, "ai_models", aiApiModels, "ai_number_of_messages_in_history", aiNumberOfMessagesInHistory, "ai_max_output_tokens", aiMaxOutputTokens)
+
 	return GodisConfig{
 		DiscordToken:                discordToken,
 		AIApiKey:                    aiApiKey,
@@ -111,5 +130,6 @@ func GetConfig() GodisConfig {
 		AIApiBaseUrl:                aiApiBaseUrl,
 		AIApiModels:                 aiApiModels,
 		AINumberOfMessagesInHistory: aiNumberOfMessagesInHistory,
+		AIMaxOutputTokens:           aiMaxOutputTokens,
 	}
 }
