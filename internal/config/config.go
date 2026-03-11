@@ -63,10 +63,6 @@ func GetConfig() GodisConfig {
 	}
 
 	aiAllowedServersList := os.Getenv("AI_ALLOWED_SERVERS") // TODO in the future, allow "ALL" as an input
-	if aiAllowedServersList == "" {
-		slog.Warn("No servers have been specified. AI features will be disabled!")
-		aiEnabled = false
-	}
 
 	var aiAllowedServers = make(map[string]bool)
 	for server := range strings.SplitSeq(aiAllowedServersList, ",") {
@@ -77,11 +73,6 @@ func GetConfig() GodisConfig {
 	}
 
 	aiAllowedChannelsList := os.Getenv("AI_ALLOWED_CHANNELS") // TODO in the future, allow "ALL" as an input
-	if aiAllowedChannelsList == "" {
-		slog.Warn("No channels have been specified. AI features will be disabled!")
-		aiEnabled = false
-	}
-
 	var aiAllowedChannels = make(map[string]bool)
 	for channel := range strings.SplitSeq(aiAllowedChannelsList, ",") {
 		s := strings.TrimSpace(channel)
@@ -93,6 +84,11 @@ func GetConfig() GodisConfig {
 	aiSystemPrompt := os.Getenv("AI_SYSTEM_PROMPT")
 	if aiSystemPrompt == "" {
 		slog.Warn("No AI_SYSTEM_PROMPT detected. AI features will be disabled!")
+		aiEnabled = false
+	}
+
+	if len(aiAllowedServers) == 0 && len(aiAllowedChannels) == 0 {
+		slog.Warn("No server or channels have been specified. AI features will be disabled!")
 		aiEnabled = false
 	}
 

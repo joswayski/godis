@@ -17,3 +17,7 @@ func (g *Godis) HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) 
 	go g.HandleReplies(s, m)
 
 }
+
+func (g *Godis) IsAIAllowed(serverId string, channelId string) bool {
+	return g.Config.AIAllowedServers[serverId] || g.Config.AIAllowedChannels[channelId]
+}

@@ -19,13 +19,12 @@ func (g *Godis) HandleReplies(s *discordgo.Session, m *discordgo.MessageCreate) 
 		return
 	}
 
-	if g.HasReplaceableLink(m.Content) {
-		return // Wait for the other goroutine to replace the message
+	if !g.IsAIAllowed(m.GuildID, m.ChannelID) {
+		return
 	}
 
-	if !g.Config.AIAllowedServers[m.GuildID] && !g.Config.AIAllowedChannels[m.ChannelID] {
-		return // If we're not in an allowed server / channel combo, return
-		// TODO improve this
+	if g.HasReplaceableLink(m.Content) {
+		return // Wait for the other goroutine to replace the message
 	}
 
 	if m.Author.ID == s.State.User.ID {
@@ -33,8 +32,8 @@ func (g *Godis) HandleReplies(s *discordgo.Session, m *discordgo.MessageCreate) 
 		return
 	}
 
+	// Sometimes messages don't have embeds populated right away
 	shouldRefetch := shouldRefetchForEmbeds(m.Message)
-
 	currentMsg := m.Message
 	if shouldRefetch {
 		time.Sleep(1500 * time.Millisecond)
