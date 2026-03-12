@@ -12,13 +12,12 @@ type Godis struct {
 }
 
 func (g *Godis) HandleMessage(s *discordgo.Session, m *discordgo.MessageCreate) {
-
 	go g.HandleEmbeds(s, m)
 
-	if g.Config.AIEnabled {
-		if g.Config.AIAllowedServers[m.GuildID] && g.Config.AIAllowedChannels[m.ChannelID] {
-			go g.HandleReplies(s, m)
-		}
-	}
+	go g.HandleReplies(s, m)
 
+}
+
+func (g *Godis) IsAIAllowed(serverId string, channelId string) bool {
+	return g.Config.AIAllowedServers[serverId] || g.Config.AIAllowedChannels[channelId]
 }

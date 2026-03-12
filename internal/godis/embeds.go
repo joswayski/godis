@@ -16,16 +16,14 @@ var (
 )
 
 func (g *Godis) HandleEmbeds(s *discordgo.Session, m *discordgo.MessageCreate) {
+	if !g.HasReplaceableLink(m.Content) {
+		return
+	}
 
 	newMessage := m.Content
 	newMessage = xitterRegex.ReplaceAllString(newMessage, "https://vxtwitter.com$1")
 	newMessage = facebookRegex.ReplaceAllString(newMessage, "https://facebed.com$1")
 	newMessage = instagramRegex.ReplaceAllString(newMessage, "https://eeinstagram.com$1")
-
-	if newMessage == m.Content {
-		// No changes, ignore
-		return
-	}
 
 	godisWebhook, err := webhooks.GetGodisWebhook(s, m)
 	if err != nil {
@@ -68,5 +66,10 @@ func (g *Godis) HandleEmbeds(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if err != nil {
 		slog.Error("Error deleting old message", "error", err.Error(), "content", m.Content, "author", m.Author)
 	}
+
+}
+
+func (g *Godis) HasReplaceableLink(content string) bool {
+	return xitterRegex.MatchString(content) || facebookRegex.MatchString(content) || instagramRegex.MatchString(content)
 
 }
