@@ -2,15 +2,18 @@ package godis
 
 import (
 	"context"
+	"encoding/base64"
+	"fmt"
+	"io"
 	"log/slog"
 	"math/rand/v2"
+	"net/http"
 	"strings"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/joswayski/godis/internal/messages"
 	"github.com/openai/openai-go/v3"
-	"github.com/openai/openai-go/v3/responses"
 )
 
 // https://developers.openai.com/api/reference/go/
@@ -48,14 +51,13 @@ func (g *Godis) HandleReplies(s *discordgo.Session, m *discordgo.MessageCreate) 
 		}
 	}
 
-	params := responses.ResponseNewParams{
-		// https://openrouter.ai/docs/api/reference/responses/basic-usage
-		Model:           g.Config.AIApiModels[0], // TODO allow fallbacks / retries
-		Instructions:    openai.String(g.Config.AISystemPrompt),
-		MaxOutputTokens: openai.Int(int64(g.Config.AIMaxOutputTokens)),
+	params := openai.ChatCompletionNewParams{
+		// https://openrouter.ai/docs/quickstart
+		Model:               g.Config.AIApiModels[0], // TODO allow fallbacks / retries,
+		MaxCompletionTokens: openai.Int(int64(g.Config.AIMaxOutputTokens)),
 	}
 
-	var inputItems responses.ResponseInputParam
+	var messages []openai.ChatCompletionMessageParamUnion
 
 	// Give it context of the messages before our current one
 	history, err := s.ChannelMessages(m.ChannelID, g.Config.AINumberOfMessagesInHistory, m.ID, "", "")
@@ -63,33 +65,29 @@ func (g *Godis) HandleReplies(s *discordgo.Session, m *discordgo.MessageCreate) 
 	if err != nil {
 		slog.Error("Error fetching channel history", "error", err.Error())
 	}
+	messages = append(messages, openai.SystemMessage(g.Config.AISystemPrompt))
 
 	// Messages come newest first, so reverse it
 	for i := len(history) - 1; i >= 0; i-- {
 		msg := history[i]
-		role := responses.EasyInputMessageRoleUser
+		isAssistant := msg.Author.ID == s.State.User.ID // our own messages
 
-		// Our own messages
-		if msg.Author.ID == s.State.User.ID {
-			role = responses.EasyInputMessageRoleAssistant
-		}
-
-		inputItems = append(inputItems, buildInputItem(msg, role))
+		messages = append(messages, buildMessages(msg, isAssistant))
 	}
 
 	// Add our newest message to the end
-	inputItems = append(inputItems, buildInputItem(currentMsg, responses.EasyInputMessageRoleUser))
+	messages = append(messages, buildMessages(currentMsg, false))
 
-	params.Input = responses.ResponseNewParamsInputUnion{OfInputItemList: inputItems}
-
-	response, err := g.AIClient.Responses.New(context.TODO(), params)
+	// Set the messages and send it
+	params.Messages = messages
+	response, err := g.AIClient.Chat.Completions.New(context.TODO(), params)
 
 	if err != nil {
 		slog.Error("Error ocurred generating response", "error", err.Error(), "message", m.Content)
 		return
 	}
 
-	if len(response.Output) == 0 || strings.Contains(strings.ToLower(response.OutputText()), "no_response") {
+	if len(response.Choices) == 0 || strings.Contains(strings.ToLower(response.Choices[0].Message.Content), "no_response") {
 		// TODO use tools instead
 		return
 	}
@@ -99,7 +97,7 @@ func (g *Godis) HandleReplies(s *discordgo.Session, m *discordgo.MessageCreate) 
 	jitter := time.Duration(rand.IntN(2000)+100) * time.Millisecond
 	time.Sleep(jitter)
 
-	_, err = s.ChannelMessageSend(m.ChannelID, response.OutputText())
+	_, err = s.ChannelMessageSend(m.ChannelID, response.Choices[0].Message.Content)
 
 	if err != nil {
 		slog.Error("Error sending discord message", "response", response)
@@ -120,52 +118,76 @@ func shouldRefetchForEmbeds(msg *discordgo.Message) bool {
 	return strings.Contains(msg.Content, "http://") || strings.Contains(msg.Content, "https://")
 }
 
-func buildInputItem(msg *discordgo.Message, role responses.EasyInputMessageRole) responses.ResponseInputItemUnionParam {
+func buildMessages(msg *discordgo.Message, isAssistant bool) openai.ChatCompletionMessageParamUnion {
 	content := msg.Content
 
 	// Don't format in this manner for our own bot messages otherwise replies
-	// tend to include the timestamp and user name when posting
-	if role != responses.EasyInputMessageRoleAssistant {
+	// tend to include the timestamp and user name when poasting
+	if !isAssistant {
 		content = messages.GetContent(msg)
 	}
 
+	// Handle the no attachment scenario
 	if len(msg.Attachments) == 0 {
-		return responses.ResponseInputItemParamOfMessage(content, role)
+		if isAssistant {
+			return openai.AssistantMessage(content)
+		}
+
+		return openai.UserMessage(content)
 	}
 
 	// Handle messages with attachments
 	// First add the text / user / timestamp
-	parts := responses.ResponseInputMessageContentListParam{
-		responses.ResponseInputContentParamOfInputText(content),
+	parts := []openai.ChatCompletionContentPartUnionParam{
+		openai.TextContentPart(content),
 	}
 
 	for _, att := range msg.Attachments {
 		slog.Info("Attachment", "filename", att.Filename, "content_type", att.ContentType, "url", att.URL)
 
 		if strings.HasPrefix(att.ContentType, "image/") {
-			parts = append(parts, responses.ResponseInputContentUnionParam{
-				OfInputImage: &responses.ResponseInputImageParam{
-					ImageURL: openai.String(att.URL),
-					Detail:   responses.ResponseInputImageDetailAuto,
-				},
-			})
+			parts = append(parts, openai.ImageContentPart(openai.ChatCompletionContentPartImageImageURLParam{
+				URL:    att.URL,
+				Detail: "auto",
+			}))
 		} else if strings.HasPrefix(att.ContentType, "audio/") {
-			// Skip for now
-			// TODO
-			// Need to convert from .ogg to wav or mp3
-			continue
+			data, err := downloadFile(att.URL)
+			if err != nil {
+				slog.Error("Error downloading file", "name", att.Filename, "url", att.URL, "error", err.Error())
+				continue
+			}
+
+			b64 := base64.StdEncoding.EncodeToString(data)
+			parts = append(parts, openai.InputAudioContentPart(openai.ChatCompletionContentPartInputAudioInputAudioParam{
+				Data:   b64,
+				Format: "ogg", // not supported by openai SDK, but gemini supports it
+			}))
+
 		} else {
 			// All other files
-			parts = append(parts, responses.ResponseInputContentUnionParam{
-				OfInputFile: &responses.ResponseInputFileParam{
-					FileURL:  openai.String(att.URL),
-					Filename: openai.String(att.Filename),
-				},
-			})
+			parts = append(parts, openai.FileContentPart(openai.ChatCompletionContentPartFileFileParam{
+				FileData: openai.String(att.URL),
+				Filename: openai.String(att.Filename),
+			}))
 		}
 
 	}
 
-	return responses.ResponseInputItemParamOfMessage(parts, role)
+	return openai.UserMessage(parts)
 
+}
+
+func downloadFile(url string) ([]byte, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("non 200 status: %s", resp.Status)
+	}
+
+	return io.ReadAll(resp.Body)
 }
