@@ -68,6 +68,7 @@ func (g *Godis) HandleReplies(s *discordgo.Session, m *discordgo.MessageCreate) 
 	for i := len(history) - 1; i >= 0; i-- {
 		msg := history[i]
 		role := responses.EasyInputMessageRoleUser
+
 		// Our own messages
 		if msg.Author.ID == s.State.User.ID {
 			role = responses.EasyInputMessageRoleAssistant
@@ -121,6 +122,10 @@ func shouldRefetchForEmbeds(msg *discordgo.Message) bool {
 
 func buildInputItem(msg *discordgo.Message, role responses.EasyInputMessageRole) responses.ResponseInputItemUnionParam {
 	content := messages.GetContent(msg)
+
+	if role == responses.EasyInputMessageRoleAssistant {
+		content = msg.Content
+	}
 
 	if len(msg.Attachments) == 0 {
 		return responses.ResponseInputItemParamOfMessage(content, role)
