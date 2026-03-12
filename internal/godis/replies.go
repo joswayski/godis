@@ -133,6 +133,8 @@ func buildInputItem(msg *discordgo.Message, role responses.EasyInputMessageRole)
 	}
 
 	for _, att := range msg.Attachments {
+		slog.Info("Attachment", "filename", att.Filename, "content_type", att.ContentType, "url", att.URL)
+
 		if strings.HasPrefix(att.ContentType, "image/") {
 			parts = append(parts, responses.ResponseInputContentUnionParam{
 				OfInputImage: &responses.ResponseInputImageParam{
@@ -140,6 +142,11 @@ func buildInputItem(msg *discordgo.Message, role responses.EasyInputMessageRole)
 					Detail:   responses.ResponseInputImageDetailAuto,
 				},
 			})
+		} else if strings.HasPrefix(att.ContentType, "audio/") {
+			// Skip for now
+			// TODO
+			// Need to convert from .ogg to wav or mp3
+			continue
 		} else {
 			// All other files
 			parts = append(parts, responses.ResponseInputContentUnionParam{
@@ -149,6 +156,7 @@ func buildInputItem(msg *discordgo.Message, role responses.EasyInputMessageRole)
 				},
 			})
 		}
+
 	}
 
 	return responses.ResponseInputItemParamOfMessage(parts, role)
