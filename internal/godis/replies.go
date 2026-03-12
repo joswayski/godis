@@ -57,7 +57,7 @@ func (g *Godis) HandleReplies(s *discordgo.Session, m *discordgo.MessageCreate) 
 		// https://openrouter.ai/docs/quickstart
 		Model:               g.Config.AIApiModels[0], // TODO allow fallbacks / retries,
 		MaxCompletionTokens: openai.Int(int64(g.Config.AIMaxOutputTokens)),
-		Modalities:          []string{"text", "image"},
+		Tools:               messages.Tools,
 	}
 
 	var messages []openai.ChatCompletionMessageParamUnion
