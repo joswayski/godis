@@ -121,10 +121,12 @@ func shouldRefetchForEmbeds(msg *discordgo.Message) bool {
 }
 
 func buildInputItem(msg *discordgo.Message, role responses.EasyInputMessageRole) responses.ResponseInputItemUnionParam {
-	content := messages.GetContent(msg)
+	content := msg.Content
 
-	if role == responses.EasyInputMessageRoleAssistant {
-		content = msg.Content
+	// Don't format in this manner for our own bot messages otherwise replies
+	// tend to include the timestamp and user name when posting
+	if role != responses.EasyInputMessageRoleAssistant {
+		content = messages.GetContent(msg)
 	}
 
 	if len(msg.Attachments) == 0 {
