@@ -60,7 +60,7 @@ func (g *Godis) HandleReplies(s *discordgo.Session, m *discordgo.MessageCreate) 
 		Tools:               messages.Tools,
 	}
 
-	var messages []openai.ChatCompletionMessageParamUnion
+	var messagesToSend []openai.ChatCompletionMessageParamUnion
 
 	// Give it context of the messages before our current one
 	history, err := s.ChannelMessages(m.ChannelID, g.Config.AINumberOfMessagesInHistory, m.ID, "", "")
@@ -68,21 +68,33 @@ func (g *Godis) HandleReplies(s *discordgo.Session, m *discordgo.MessageCreate) 
 	if err != nil {
 		slog.Error("Error fetching channel history", "error", err.Error())
 	}
-	messages = append(messages, openai.SystemMessage(g.Config.AISystemPrompt))
+	messagesToSend = append(messagesToSend, openai.SystemMessage(g.Config.AISystemPrompt))
 
 	// Messages come newest first, so reverse it
 	for i := len(history) - 1; i >= 0; i-- {
 		msg := history[i]
 		isAssistant := msg.Author.ID == s.State.User.ID // our own messages
 
-		messages = append(messages, buildMessages(msg, isAssistant))
+		messagesToSend = append(messagesToSend, buildMessages(msg, isAssistant))
 	}
 
 	// Add our newest message to the end
-	messages = append(messages, buildMessages(currentMsg, false))
+	messagesToSend = append(messagesToSend, buildMessages(currentMsg, false))
+
+	typingDone := make(chan struct{})
 
 	// Set the messages and send it
-	params.Messages = messages
+	params.Messages = messagesToSend
+	var generatedImageFiles []*discordgo.File
+	alreadyTyping := false
+
+	// Retrigger the typing animation for image generations which take too long
+	typingLoopStarted := false
+	defer func() {
+		if typingLoopStarted {
+			close(typingDone)
+		}
+	}()
 
 	maxIterations := 3
 	for range maxIterations {
@@ -99,10 +111,8 @@ func (g *Godis) HandleReplies(s *discordgo.Session, m *discordgo.MessageCreate) 
 
 		choice := response.Choices[0]
 
-		var generatedImageFiles []*discordgo.File
-
 		if choice.FinishReason == "tool_calls" {
-			messages = append(messages, choice.Message.ToParam())
+			messagesToSend = append(messagesToSend, choice.Message.ToParam())
 			// Handle tool calls
 			for _, toolCall := range choice.Message.ToolCalls {
 				toolName := toolCall.Function.Name
@@ -112,14 +122,44 @@ func (g *Godis) HandleReplies(s *discordgo.Session, m *discordgo.MessageCreate) 
 
 				if toolName == "generate_image" {
 					// Get the params
-
 					var args generateImageArgs
 
 					err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args)
 
 					if err != nil {
-						messages = append(messages, openai.ToolMessage("failed to parse generate_image args", toolCall.ID))
+						messagesToSend = append(messagesToSend, openai.ToolMessage("failed to parse generate_image args", toolCall.ID))
 						continue
+					}
+
+					alreadyTyping = messages.StartTyping(alreadyTyping, s, m.ChannelID)
+					if !typingLoopStarted {
+						// Retrigger the typing animation for image generations which take too long
+						typingLoopStarted = true
+						go func() {
+							ticker := time.NewTicker(4 * time.Second)
+							defer ticker.Stop()
+
+							for {
+								select {
+								case <-ticker.C:
+									s.ChannelTyping(m.ChannelID)
+
+								case <-typingDone:
+									return
+								}
+
+							}
+						}()
+					}
+
+					imagePrompt := args.Prompt
+
+					if args.AspectRatio != "" {
+						imagePrompt += fmt.Sprintf(". Use aspect ratio %s.", args.AspectRatio)
+					}
+
+					if args.ImageSize != "" {
+						imagePrompt += fmt.Sprintf(" Target image size %s.", args.ImageSize)
 					}
 
 					// Call image model
@@ -127,38 +167,38 @@ func (g *Godis) HandleReplies(s *discordgo.Session, m *discordgo.MessageCreate) 
 						// https://openrouter.ai/docs/quickstart
 						Model: "google/gemini-3.1-flash-image-preview", // TODO fallback, retries, make configurable
 						Messages: []openai.ChatCompletionMessageParamUnion{
-							openai.UserMessage(args.Prompt),
+							openai.UserMessage(imagePrompt),
 						},
 						Modalities: []string{"image", "text"},
 					}
 
 					imageResp, err := g.AIClient.Chat.Completions.New(context.TODO(), imageParams)
 					if err != nil {
-						messages = append(messages, openai.ToolMessage("image generation failed", toolCall.ID))
-						params.Messages = messages
+						messagesToSend = append(messagesToSend, openai.ToolMessage("image generation failed", toolCall.ID))
+						params.Messages = messagesToSend
 						continue
 					}
 					if len(imageResp.Choices) == 0 {
-						messages = append(messages, openai.ToolMessage("image generation returned no choices", toolCall.ID))
-						params.Messages = messages
+						messagesToSend = append(messagesToSend, openai.ToolMessage("image generation returned no choices", toolCall.ID))
+						params.Messages = messagesToSend
 						continue
 					}
 
 					newImages := extractImages(imageResp.Choices[0].Message.RawJSON())
 					if len(newImages) == 0 {
-						messages = append(messages, openai.ToolMessage("failed to extract images", toolCall.ID))
-						params.Messages = messages
+						messagesToSend = append(messagesToSend, openai.ToolMessage("failed to extract images", toolCall.ID))
+						params.Messages = messagesToSend
 						continue
 					}
 
 					generatedImageFiles = append(generatedImageFiles, newImages...)
 
-					toolResult := fmt.Sprintf(`{"status":"ok","prompt":%q,"images_generated":%d}`, args.Prompt, len(generatedImageFiles))
+					toolResult := fmt.Sprintf(`{"status":"ok","prompt":%q,"images_generated":%d}`, args.Prompt, len(newImages))
 
-					messages = append(messages, openai.ToolMessage(toolResult, toolCall.ID))
+					messagesToSend = append(messagesToSend, openai.ToolMessage(toolResult, toolCall.ID))
 				}
 			}
-			params.Messages = messages
+			params.Messages = messagesToSend
 			continue
 		}
 
@@ -166,10 +206,12 @@ func (g *Godis) HandleReplies(s *discordgo.Session, m *discordgo.MessageCreate) 
 			return
 		}
 
-		// Add channel typing indicator
-		s.ChannelTyping(m.ChannelID)
-		jitter := time.Duration(rand.IntN(2000)+100) * time.Millisecond
-		time.Sleep(jitter)
+		alreadyTyping = messages.StartTyping(alreadyTyping, s, m.ChannelID)
+		if len(generatedImageFiles) == 0 {
+			// Add some jitter to text only responses
+			jitter := time.Duration(rand.IntN(2000)+100) * time.Millisecond
+			time.Sleep(jitter)
+		}
 
 		if len(generatedImageFiles) > 0 {
 
@@ -179,9 +221,7 @@ func (g *Godis) HandleReplies(s *discordgo.Session, m *discordgo.MessageCreate) 
 			})
 
 		} else {
-
 			_, err = s.ChannelMessageSend(m.ChannelID, choice.Message.Content)
-
 		}
 
 		if err != nil {
@@ -329,5 +369,7 @@ func extractImages(rawJSON string) []*discordgo.File {
 }
 
 type generateImageArgs struct {
-	Prompt string `json:"prompt"`
+	Prompt      string `json:"prompt"`
+	AspectRatio string `json:"aspect_ratio,omitempty"`
+	ImageSize   string `json:"image_size,omitempty"`
 }

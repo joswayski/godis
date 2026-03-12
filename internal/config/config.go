@@ -110,6 +110,7 @@ func GetConfig() GodisConfig {
 	}
 
 	if aiMaxOutputTokens > 1500 {
+		// TODO might need a rework with images
 		slog.Warn(fmt.Sprintf("AI_MAX_OUTPUT_TOKENS is greater than 1500 (received %d) limiting to %d to make sure messages fit in the Discord limit. ", aiMaxOutputTokens, defaultAIMaxOutputTokens))
 		aiMaxOutputTokens = defaultAIMaxOutputTokens
 	}
