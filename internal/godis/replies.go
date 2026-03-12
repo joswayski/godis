@@ -100,7 +100,7 @@ func (g *Godis) HandleReplies(s *discordgo.Session, m *discordgo.MessageCreate) 
 	_, err = s.ChannelMessageSend(m.ChannelID, response.Choices[0].Message.Content)
 
 	if err != nil {
-		slog.Error("Error sending discord message", "response", response)
+		slog.Error("Error sending discord message", "response", response, "error", err.Error())
 	}
 }
 
