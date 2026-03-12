@@ -30,6 +30,7 @@ See [.env.example](.env.example) for all of the available parameters.
 
 ![audio-demo.png](./assets/audio.png)
 
+TODO update image capabilities
 
 ### Prerequisites
 A `DISCORD_TOKEN` for a bot with the following:
