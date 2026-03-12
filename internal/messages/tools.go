@@ -20,4 +20,8 @@ var Tools = []openai.ChatCompletionToolUnionParam{
 			"required": []string{"prompt"},
 		},
 	}),
+	openai.ChatCompletionFunctionTool(shared.FunctionDefinitionParam{
+		Name:        "no_response",
+		Description: openai.String("Call this when the message doesn't warrant a response from you"),
+	}),
 }

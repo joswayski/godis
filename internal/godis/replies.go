@@ -83,37 +83,114 @@ func (g *Godis) HandleReplies(s *discordgo.Session, m *discordgo.MessageCreate) 
 
 	// Set the messages and send it
 	params.Messages = messages
-	response, err := g.AIClient.Chat.Completions.New(context.TODO(), params)
 
-	if err != nil {
-		slog.Error("Error ocurred generating response", "error", err.Error(), "message", m.Content)
+	maxIterations := 3
+	for range maxIterations {
+		response, err := g.AIClient.Chat.Completions.New(context.TODO(), params)
+
+		if err != nil {
+			slog.Error("Error ocurred generating response", "error", err.Error(), "message", m.Content)
+			return
+		}
+
+		if len(response.Choices) == 0 {
+			return
+		}
+
+		choice := response.Choices[0]
+
+		var generatedImageFiles []*discordgo.File
+
+		if choice.FinishReason == "tool_calls" {
+			messages = append(messages, choice.Message.ToParam())
+			// Handle tool calls
+			for _, toolCall := range choice.Message.ToolCalls {
+				toolName := toolCall.Function.Name
+				if toolName == "no_response" {
+					return
+				}
+
+				if toolName == "generate_image" {
+					// Get the params
+
+					var args generateImageArgs
+
+					err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args)
+
+					if err != nil {
+						messages = append(messages, openai.ToolMessage("failed to parse generate_image args", toolCall.ID))
+						continue
+					}
+
+					// Call image model
+					imageParams := openai.ChatCompletionNewParams{
+						// https://openrouter.ai/docs/quickstart
+						Model: "google/gemini-3.1-flash-image-preview", // TODO fallback, retries, make configurable
+						Messages: []openai.ChatCompletionMessageParamUnion{
+							openai.UserMessage(args.Prompt),
+						},
+						Modalities: []string{"image", "text"},
+					}
+
+					imageResp, err := g.AIClient.Chat.Completions.New(context.TODO(), imageParams)
+					if err != nil {
+						messages = append(messages, openai.ToolMessage("image generation failed", toolCall.ID))
+						params.Messages = messages
+						continue
+					}
+					if len(imageResp.Choices) == 0 {
+						messages = append(messages, openai.ToolMessage("image generation returned no choices", toolCall.ID))
+						params.Messages = messages
+						continue
+					}
+
+					newImages := extractImages(imageResp.Choices[0].Message.RawJSON())
+					if len(newImages) == 0 {
+						messages = append(messages, openai.ToolMessage("failed to extract images", toolCall.ID))
+						params.Messages = messages
+						continue
+					}
+
+					generatedImageFiles = append(generatedImageFiles, newImages...)
+
+					toolResult := fmt.Sprintf(`{"status":"ok","prompt":%q,"images_generated":%d}`, args.Prompt, len(generatedImageFiles))
+
+					messages = append(messages, openai.ToolMessage(toolResult, toolCall.ID))
+				}
+			}
+			params.Messages = messages
+			continue
+		}
+
+		if choice.Message.Content == "" && len(generatedImageFiles) == 0 {
+			return
+		}
+
+		// Add channel typing indicator
+		s.ChannelTyping(m.ChannelID)
+		jitter := time.Duration(rand.IntN(2000)+100) * time.Millisecond
+		time.Sleep(jitter)
+
+		if len(generatedImageFiles) > 0 {
+
+			_, err = s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
+				Content: choice.Message.Content,
+				Files:   generatedImageFiles,
+			})
+
+		} else {
+
+			_, err = s.ChannelMessageSend(m.ChannelID, choice.Message.Content)
+
+		}
+
+		if err != nil {
+			slog.Error("Error sending discord message", "response", response)
+		}
+
 		return
 	}
 
-	if len(response.Choices) == 0 || strings.Contains(strings.ToLower(response.Choices[0].Message.Content), "no_response") {
-		// TODO use tools instead
-		return
-	}
-
-	// Add channel typing indicator
-	s.ChannelTyping(m.ChannelID)
-	jitter := time.Duration(rand.IntN(2000)+100) * time.Millisecond
-	time.Sleep(jitter)
-
-	imageFiles := extractImages(response.Choices[0].Message.RawJSON())
-	if len(imageFiles) > 0 {
-		_, err = s.ChannelMessageSendComplex(m.ChannelID, &discordgo.MessageSend{
-			Content: response.Choices[0].Message.Content,
-			Files:   imageFiles,
-		})
-	} else {
-		_, err = s.ChannelMessageSend(m.ChannelID, response.Choices[0].Message.Content)
-
-	}
-
-	if err != nil {
-		slog.Error("Error sending discord message", "response", response)
-	}
 }
 
 func shouldRefetchForEmbeds(msg *discordgo.Message) bool {
@@ -249,4 +326,8 @@ func extractImages(rawJSON string) []*discordgo.File {
 	}
 
 	return files
+}
+
+type generateImageArgs struct {
+	Prompt string `json:"prompt"`
 }
