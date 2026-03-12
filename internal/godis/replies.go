@@ -118,6 +118,7 @@ func shouldRefetchForEmbeds(msg *discordgo.Message) bool {
 	return strings.Contains(msg.Content, "http://") || strings.Contains(msg.Content, "https://")
 }
 
+// TODO when we generate files, we need to handle assistnat messages falling through as user messages
 func buildMessages(msg *discordgo.Message, isAssistant bool) openai.ChatCompletionMessageParamUnion {
 	content := msg.Content
 

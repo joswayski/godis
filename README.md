@@ -22,11 +22,14 @@ Godis can read and respond to messages using any OpenAI-compatible API (e.g. Ope
 
 On each message that we receive, we pass in the last N (`AI_NUMBER_OF_MESSAGES_IN_HISTORY`) number of messages in the channel as context for the request. Responses can be customized via the system prompt (`AI_SYSTEM_PROMPT`). It is ideal to tweak this so that Godis does not reply to every message and the replies are relevant to the conversation.
 
-Godis has a typing indicator with some jitter before responding for a more natural feel. Godis also gets the context from embedded links, and can even read files and images (audio is still a WIP). 
+Godis has a typing indicator with some jitter before responding for a more natural feel. Godis also gets the context from embedded links, and can even read files, images, and audio. 
 
 See [.env.example](.env.example) for all of the available parameters.
 
-![chat.gif](./assets/chat.gif)
+![chat-demo.gif](./assets/chat.gif)
+
+![audio-demo.png](./assets/audio.png)
+
 
 ### Prerequisites
 A `DISCORD_TOKEN` for a bot with the following:
