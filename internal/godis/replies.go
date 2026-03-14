@@ -167,8 +167,7 @@ func buildMessages(msg *discordgo.Message, isAssistant bool) openai.ChatCompleti
 		} else if strings.HasPrefix(att.ContentType, "video/") {
 			// ignore for now, most models dont support it
 			continue
-		}
-		else {
+		} else {
 			// All other files
 			parts = append(parts, openai.FileContentPart(openai.ChatCompletionContentPartFileFileParam{
 				FileData: openai.String(att.URL),
