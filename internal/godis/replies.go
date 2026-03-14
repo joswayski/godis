@@ -164,7 +164,7 @@ func buildMessages(msg *discordgo.Message, isAssistant bool) openai.ChatCompleti
 				Format: "ogg", // not supported by openai SDK, but gemini supports it
 			}))
 
-		} if strings.HasPrefix(att.ContentType, "video/") {
+		} else if strings.HasPrefix(att.ContentType, "video/") {
 			// ignore for now, most models dont support it
 			continue
 		}
