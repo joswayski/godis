@@ -17,11 +17,9 @@ import (
 	"github.com/openai/openai-go/v3"
 )
 
-const maxBufferedMessages = 5
-
 // https://developers.openai.com/api/reference/go/
 func (g *Godis) HandleReplies(s *discordgo.Session, m *discordgo.MessageCreate) {
-	slog.Info("Message handling in replies", "message", m)
+	slog.Info("Message handling in replies", "message", m.Content)
 
 	if !g.Config.AIEnabled {
 		return
@@ -45,16 +43,19 @@ func (g *Godis) HandleReplies(s *discordgo.Session, m *discordgo.MessageCreate) 
 	// Check if we have a pending batch of messages to send
 	buf, exists := g.MessageBuffer[m.ChannelID]
 	if !exists {
+		slog.Info("Creating buffer for the first time", "content", m.Message.Content)
 		buf = MessageBuffer{
 			BufferedMessages: []*discordgo.Message{m.Message},
 		}
-		buf.Timer = time.AfterFunc(1500*time.Millisecond, func() {
+		buf.Timer = time.AfterFunc(g.Config.MessagesBufferDurationMilliseconds, func() {
 			g.processBufferedMessages(s, m.ChannelID)
 		})
-	} else if len(buf.BufferedMessages) < maxBufferedMessages {
+	} else if len(buf.BufferedMessages) < g.Config.MessagesBufferCount {
+		slog.Info("Buffering...", "content", m.Message.Content)
 		buf.BufferedMessages = append(buf.BufferedMessages, m.Message)
-		buf.Timer.Reset(1500 * time.Millisecond)
+		buf.Timer.Reset(g.Config.MessagesBufferDurationMilliseconds)
 	} else {
+		slog.Info("Hit capacity!", "content", m.Message.Content)
 		// buffer is full
 		buf.Timer.Stop()
 		// Add the one that just came in
@@ -161,6 +162,7 @@ func downloadFile(url string) ([]byte, error) {
 }
 
 func (g *Godis) processBufferedMessages(s *discordgo.Session, channelId string) {
+
 	// Check if we need to refetch for any embeds on any bufferred messages
 	// Sometimes messages don't have embeds populated right away
 	g.mutex.Lock()
@@ -231,9 +233,11 @@ func (g *Godis) processBufferedMessages(s *discordgo.Session, channelId string) 
 		aiMessagesToSend = append(aiMessagesToSend, buildMessages(msg, isAssistant))
 	}
 
+	slog.Info(fmt.Sprintf("Sending ai request with %d messages", len(aiMessagesToSend)))
 	// Set the messages and send it
 	aiParams.Messages = aiMessagesToSend
 	response, err := g.AIClient.Chat.Completions.New(context.TODO(), aiParams)
+	slog.Info("got ai response", "repsonse", response)
 
 	if err != nil {
 		slog.Error("Error ocurred generating response", "error", err.Error(), "message", bufferedMessages[len(bufferedMessages)-1])

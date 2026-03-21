@@ -6,24 +6,29 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/joswayski/godis/internal/env"
 )
 
 const defaultAINumberOfMessagesInHistory = 20
 const defaultAIMaxOutputTokens = 1000
+const defaultMessagesBufferCount = 5
+const defaultMessagesBufferTimerMilliseconds = 1500
 
 type GodisConfig struct {
-	DiscordToken                string
-	AIApiKey                    string
-	AIApiBaseUrl                string
-	AIApiModels                 []string
-	AIAllowedServers            map[string]bool
-	AIAllowedChannels           map[string]bool // These are globally unique
-	AISystemPrompt              string
-	AIEnabled                   bool
-	AINumberOfMessagesInHistory int
-	AIMaxOutputTokens           int
+	DiscordToken                       string
+	AIApiKey                           string
+	AIApiBaseUrl                       string
+	AIApiModels                        []string
+	AIAllowedServers                   map[string]bool
+	AIAllowedChannels                  map[string]bool // These are globally unique
+	AISystemPrompt                     string
+	AIEnabled                          bool
+	AINumberOfMessagesInHistory        int
+	AIMaxOutputTokens                  int
+	MessagesBufferCount                int
+	MessagesBufferDurationMilliseconds time.Duration
 }
 
 func GetConfig() GodisConfig {
@@ -114,18 +119,35 @@ func GetConfig() GodisConfig {
 		aiMaxOutputTokens = defaultAIMaxOutputTokens
 	}
 
-	slog.Info("Config Loaded!", "ai_enabled", aiEnabled, "ai_allowed_servers", aiAllowedServers, "ai_allowed_channels", aiAllowedChannels, "ai_base_url", aiApiBaseUrl, "ai_models", aiApiModels, "ai_number_of_messages_in_history", aiNumberOfMessagesInHistory, "ai_max_output_tokens", aiMaxOutputTokens)
-
-	return GodisConfig{
-		DiscordToken:                discordToken,
-		AIApiKey:                    aiApiKey,
-		AIAllowedServers:            aiAllowedServers,
-		AIAllowedChannels:           aiAllowedChannels,
-		AISystemPrompt:              aiSystemPrompt,
-		AIEnabled:                   aiEnabled,
-		AIApiBaseUrl:                aiApiBaseUrl,
-		AIApiModels:                 aiApiModels,
-		AINumberOfMessagesInHistory: aiNumberOfMessagesInHistory,
-		AIMaxOutputTokens:           aiMaxOutputTokens,
+	msgBufferCount, err := strconv.Atoi(os.Getenv("MESSAGES_BUFFER_COUNT"))
+	if err != nil || msgBufferCount <= 0 {
+		slog.Warn("Invalid MESSAGES_BUFFER_COUNT detected, will be using the default", "value", defaultMessagesBufferCount)
+		msgBufferCount = defaultMessagesBufferCount
 	}
+
+	msgBufferTimerMilliseconds, err := strconv.Atoi(os.Getenv("MESSAGES_BUFFER_TIMER_MILLISECONDS"))
+	if err != nil || msgBufferTimerMilliseconds <= 0 {
+		slog.Warn("Invalid MESSAGES_BUFFER_TIMER_MILLISECONDS detected, will be using the default", "value", defaultMessagesBufferTimerMilliseconds)
+		msgBufferTimerMilliseconds = defaultMessagesBufferTimerMilliseconds
+	}
+
+	godisConfig := GodisConfig{
+		DiscordToken:                       discordToken,
+		AIApiKey:                           aiApiKey,
+		AIAllowedServers:                   aiAllowedServers,
+		AIAllowedChannels:                  aiAllowedChannels,
+		AISystemPrompt:                     aiSystemPrompt,
+		AIEnabled:                          aiEnabled,
+		AIApiBaseUrl:                       aiApiBaseUrl,
+		AIApiModels:                        aiApiModels,
+		AINumberOfMessagesInHistory:        aiNumberOfMessagesInHistory,
+		AIMaxOutputTokens:                  aiMaxOutputTokens,
+		MessagesBufferCount:                msgBufferCount,
+		MessagesBufferDurationMilliseconds: time.Duration(msgBufferTimerMilliseconds) * time.Millisecond,
+	}
+
+	slog.Info("Config Loaded!", "config", godisConfig)
+
+	return godisConfig
+
 }

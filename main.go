@@ -19,8 +19,9 @@ func main() {
 
 	godisCfg := config.GetConfig()
 	bot := &godis.Godis{
-		Config:   godisCfg,
-		AIClient: ai.CreateClient(godisCfg),
+		Config:        godisCfg,
+		AIClient:      ai.CreateClient(godisCfg),
+		MessageBuffer: make(map[string]godis.MessageBuffer),
 	}
 
 	discord, err := discordgo.New("Bot " + bot.Config.DiscordToken)
