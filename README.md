@@ -16,19 +16,29 @@ Automatically replaces social media links so that video/image embeds render prop
 
 <img src="./assets/linkreplacement.gif" alt="godis demo" style="width: 700px;" />
 
-#### AI Chat (WIP)
+#### AI Chat
 
 Godis can read and respond to messages using any OpenAI-compatible API (e.g. OpenRouter). AI features are opt-in by specifying the `AI_ALLOWED_SERVERS` or `AI_ALLOWED_CHANNELS` variables.
 
-On each message that we receive, we pass in the last N (`AI_NUMBER_OF_MESSAGES_IN_HISTORY`) number of messages in the channel as context for the request. Responses can be customized via the system prompt (`AI_SYSTEM_PROMPT`). It is ideal to tweak this so that Godis does not reply to every message and the replies are relevant to the conversation.
+Messages are buffered and sent to the AI as a batch, along with the last N (`AI_NUMBER_OF_MESSAGES_IN_HISTORY`) messages in the channel for context. Responses can be customized via the system prompt (`AI_SYSTEM_PROMPT`). It is ideal to tweak this so that Godis does not reply to every message and the replies are relevant to the conversation.
 
 Godis has a typing indicator with some jitter before responding for a more natural feel. Godis also gets the context from embedded links, and can even read files, images, and audio. 
 
-See [.env.example](.env.example) for all of the available parameters.
-
 ![chat-demo.gif](./assets/chat.gif)
 
+
+
 ![audio-demo.png](./assets/audio.png)
+
+
+As mentioned above, messages are debounced to avoid rapid AI calls, you can tweak this by setting the `MESSAGES_BUFFER_COUNT` and `MESSAGES_BUFFER_TIMER_MILLISECONDS` parameters.
+
+
+![debounce-demo.png](./assets/debounce.png)
+
+
+See [.env.example](.env.example) for all of the available parameters.
+
 
 
 ### Prerequisites
@@ -56,4 +66,4 @@ Create a `.env` file at the root (see `.env.example`), then `go run .`
 
 ### Future
 
-I'd like for it to handle audio well (inputs) and also reply with voice. I want it to be able to set reminders on a schedule, and even have long term memory per channel / server to remember things about you / your friends.
+I'd like for it to handle audio better and also reply with voice and images. I want it to be able to set reminders on a schedule, and even have long term memory per channel / server to remember things about you / your friends.
