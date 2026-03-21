@@ -66,4 +66,4 @@ Create a `.env` file at the root (see `.env.example`), then `go run .`
 
 ### Future
 
-I'd like for it to handle audio well (inputs) and also reply with voice. I want it to be able to set reminders on a schedule, and even have long term memory per channel / server to remember things about you / your friends.
+I'd like for it to handle audio better and also reply with voice and images. I want it to be able to set reminders on a schedule, and even have long term memory per channel / server to remember things about you / your friends.
