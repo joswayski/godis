@@ -34,8 +34,14 @@ func attachmentLabel(att *discordgo.MessageAttachment, source string) string {
 
 func attachFile(aiMessageParts []openai.ChatCompletionContentPartUnionParam, att *discordgo.MessageAttachment, source string) []openai.ChatCompletionContentPartUnionParam {
 	slog.Info("Attachment", "filename", att.Filename, "content_type", att.ContentType, "url", att.URL)
+	contentType := normalizeContentType(att.ContentType)
 
-	if strings.HasPrefix(att.ContentType, "image/") {
+	if strings.HasPrefix(contentType, "image/") {
+		if !isSupportedImageContentType(contentType) {
+			slog.Warn("Unsupported image content type", "name", att.Filename, "content_type", att.ContentType)
+			return aiMessageParts
+		}
+
 		aiMessageParts = append(aiMessageParts, openai.TextContentPart(attachmentLabel(att, source)))
 		aiMessageParts = append(aiMessageParts, openai.ImageContentPart(openai.ChatCompletionContentPartImageImageURLParam{
 			URL:    att.URL,
@@ -45,7 +51,13 @@ func attachFile(aiMessageParts []openai.ChatCompletionContentPartUnionParam, att
 		return aiMessageParts
 	}
 
-	if strings.HasPrefix(att.ContentType, "audio/") {
+	if strings.HasPrefix(contentType, "audio/") {
+		audioFormat, ok := getContentType(contentType)
+		if !ok {
+			slog.Warn("Unsupported audio content type", "name", att.Filename, "content_type", att.ContentType)
+			return aiMessageParts
+		}
+
 		data, err := DownloadFile(att.URL)
 		if err != nil {
 			slog.Error("Error downloading file", "name", att.Filename, "url", att.URL, "error", err.Error())
@@ -56,19 +68,23 @@ func attachFile(aiMessageParts []openai.ChatCompletionContentPartUnionParam, att
 		aiMessageParts = append(aiMessageParts, openai.TextContentPart(attachmentLabel(att, source)))
 		aiMessageParts = append(aiMessageParts, openai.InputAudioContentPart(openai.ChatCompletionContentPartInputAudioInputAudioParam{
 			Data:   b64,
-			Format: "ogg", // not supported by openai SDK, but gemini supports it
+			Format: audioFormat,
 		}))
 
 		return aiMessageParts
 
 	}
 
-	if strings.HasPrefix(att.ContentType, "video/") {
+	if strings.HasPrefix(contentType, "video/") {
 		// ignore for now, most models dont support it
 		return aiMessageParts
 	}
 
-	// All other files
+	if contentType != "application/pdf" {
+		slog.Warn("Unsupported file content type", "name", att.Filename, "content_type", att.ContentType)
+		return aiMessageParts
+	}
+
 	aiMessageParts = append(aiMessageParts, openai.TextContentPart(attachmentLabel(att, source)))
 	aiMessageParts = append(aiMessageParts, openai.FileContentPart(openai.ChatCompletionContentPartFileFileParam{
 		FileData: openai.String(att.URL),
@@ -77,4 +93,43 @@ func attachFile(aiMessageParts []openai.ChatCompletionContentPartUnionParam, att
 
 	return aiMessageParts
 
+}
+
+func normalizeContentType(contentType string) string {
+	return strings.ToLower(strings.TrimSpace(strings.Split(contentType, ";")[0]))
+}
+
+func isSupportedImageContentType(contentType string) bool {
+	switch normalizeContentType(contentType) {
+	case "image/png", "image/jpeg", "image/webp", "image/gif":
+		return true
+	default:
+		return false
+	}
+}
+
+// Returns the audio format expected by the model provider, if we can infer one.
+func getContentType(contentType string) (string, bool) {
+	contentType = normalizeContentType(contentType)
+
+	switch contentType {
+	case "audio/mpeg", "audio/mp3", "audio/mpeg3", "audio/x-mpeg-3":
+		return "mp3", true
+	case "audio/wav", "audio/wave", "audio/x-wav", "audio/vnd.wave":
+		return "wav", true
+	case "audio/aiff", "audio/x-aiff":
+		return "aiff", true
+	case "audio/aac", "audio/x-aac":
+		return "aac", true
+	case "audio/ogg", "audio/opus", "application/ogg":
+		return "ogg", true
+	case "audio/flac", "audio/x-flac":
+		return "flac", true
+	case "audio/mp4", "audio/x-m4a", "audio/m4a":
+		return "m4a", true
+	case "audio/l16", "audio/pcm", "audio/x-pcm":
+		return "pcm16", true
+	default:
+		return "", false
+	}
 }
