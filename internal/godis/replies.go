@@ -2,24 +2,22 @@ package godis
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
-	"io"
 	"log/slog"
 	"math/rand/v2"
-	"net/http"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/joswayski/godis/internal/files"
 	"github.com/joswayski/godis/internal/messages"
 	"github.com/openai/openai-go/v3"
 )
 
 // https://developers.openai.com/api/reference/go/
 func (g *Godis) HandleReplies(s *discordgo.Session, m *discordgo.MessageCreate) {
-	slog.Info("Message handling in replies", "message", m.Content)
+	slog.Info("Message handling in replies", "message", m)
 
 	if !g.Config.AIEnabled {
 		return
@@ -47,13 +45,13 @@ func (g *Godis) HandleReplies(s *discordgo.Session, m *discordgo.MessageCreate) 
 		buf = MessageBuffer{
 			BufferedMessages: []*discordgo.Message{m.Message},
 		}
-		buf.Timer = time.AfterFunc(g.Config.MessagesBufferDurationMilliseconds, func() {
+		buf.Timer = time.AfterFunc(g.Config.MessagesBufferDuration, func() {
 			g.processBufferedMessages(s, m.ChannelID)
 		})
 	} else if len(buf.BufferedMessages) < g.Config.MessagesBufferCount {
 		slog.Info("Buffering...", "content", m.Message.Content)
 		buf.BufferedMessages = append(buf.BufferedMessages, m.Message)
-		buf.Timer.Reset(g.Config.MessagesBufferDurationMilliseconds)
+		buf.Timer.Reset(g.Config.MessagesBufferDuration)
 	} else {
 		slog.Info("Hit capacity!", "content", m.Message.Content)
 		// buffer is full
@@ -87,78 +85,32 @@ func shouldRefetchForEmbeds(msg *discordgo.Message) bool {
 func buildMessages(msg *discordgo.Message, isAssistant bool) openai.ChatCompletionMessageParamUnion {
 	content := msg.Content
 
-	// Don't format in this manner for our own bot messages otherwise replies
-	// tend to include the timestamp and user name when poasting
-	if !isAssistant {
+	if isAssistant {
+		// We don't support generating files yet
+		return openai.AssistantMessage(content)
+	} else {
+		// Don't format in this manner for our own bot messages otherwise replies
+		// tend to include the timestamp and user name when poasting
 		content = messages.GetContent(msg)
 	}
 
-	// Handle the no attachment scenario
-	if len(msg.Attachments) == 0 {
-		if isAssistant {
-			return openai.AssistantMessage(content)
-		}
-
+	// Handle the no attachment scenario and send the message directly
+	if !messages.HasAttachableMedia(msg) {
 		return openai.UserMessage(content)
 	}
 
 	// Handle messages with attachments
+
 	// First add the text / user / timestamp
 	parts := []openai.ChatCompletionContentPartUnionParam{
 		openai.TextContentPart(content),
 	}
 
-	for _, att := range msg.Attachments {
-		slog.Info("Attachment", "filename", att.Filename, "content_type", att.ContentType, "url", att.URL)
-
-		if strings.HasPrefix(att.ContentType, "image/") {
-			parts = append(parts, openai.ImageContentPart(openai.ChatCompletionContentPartImageImageURLParam{
-				URL:    att.URL,
-				Detail: "auto",
-			}))
-		} else if strings.HasPrefix(att.ContentType, "audio/") {
-			data, err := downloadFile(att.URL)
-			if err != nil {
-				slog.Error("Error downloading file", "name", att.Filename, "url", att.URL, "error", err.Error())
-				continue
-			}
-
-			b64 := base64.StdEncoding.EncodeToString(data)
-			parts = append(parts, openai.InputAudioContentPart(openai.ChatCompletionContentPartInputAudioInputAudioParam{
-				Data:   b64,
-				Format: "ogg", // not supported by openai SDK, but gemini supports it
-			}))
-
-		} else if strings.HasPrefix(att.ContentType, "video/") {
-			// ignore for now, most models dont support it
-			continue
-		} else {
-			// All other files
-			parts = append(parts, openai.FileContentPart(openai.ChatCompletionContentPartFileFileParam{
-				FileData: openai.String(att.URL),
-				Filename: openai.String(att.Filename),
-			}))
-		}
-
-	}
+	// Now add our files, and any files in a reply
+	parts = files.AttachFilesToMessage(parts, msg)
 
 	return openai.UserMessage(parts)
 
-}
-
-func downloadFile(url string) ([]byte, error) {
-	resp, err := http.Get(url)
-	if err != nil {
-		return nil, err
-	}
-
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("non 200 status: %s", resp.Status)
-	}
-
-	return io.ReadAll(resp.Body)
 }
 
 func (g *Godis) processBufferedMessages(s *discordgo.Session, channelId string) {
@@ -234,6 +186,7 @@ func (g *Godis) processBufferedMessages(s *discordgo.Session, channelId string) 
 	}
 
 	slog.Info(fmt.Sprintf("Sending ai request with %d messages", len(aiMessagesToSend)))
+	slog.Info("AI REQUEST", "messages", aiMessagesToSend)
 	// Set the messages and send it
 	aiParams.Messages = aiMessagesToSend
 	response, err := g.AIClient.Chat.Completions.New(context.TODO(), aiParams)
@@ -252,6 +205,7 @@ func (g *Godis) processBufferedMessages(s *discordgo.Session, channelId string) 
 	}
 
 	// Add channel typing indicator
+	// TODO allow this to increase based on message size
 	s.ChannelTyping(channelId)
 	jitter := time.Duration(rand.IntN(2000)+100) * time.Millisecond
 	time.Sleep(jitter)

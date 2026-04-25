@@ -1,47 +1,43 @@
 package messages
 
-import (
-	"io"
-	"log/slog"
-	"net/http"
-	"sync"
+import "github.com/bwmarrin/discordgo"
 
-	"github.com/bwmarrin/discordgo"
-)
-
-func GetFilesInMessage(m *discordgo.MessageCreate) (files []*discordgo.File, closers []io.Closer) {
-
-	var fileMu sync.Mutex
-	var fileWg sync.WaitGroup
-
-	for _, attachment := range m.Attachments {
-		fileWg.Add(1)
-		go func(atch *discordgo.MessageAttachment) {
-			defer fileWg.Done()
-			response, err := http.Get(atch.URL)
-			if err != nil {
-				slog.Error("Error downloading file", "attachment", atch)
-				return
-			}
-
-			if response.StatusCode != http.StatusOK {
-				response.Body.Close()
-				slog.Error("Non 200 status code downloading file", "status", response.Status, "attachment", atch)
-				return
-			}
-
-			fileMu.Lock()
-			closers = append(closers, response.Body)
-			files = append(files, &discordgo.File{
-				Name:        atch.Filename,
-				ContentType: atch.ContentType,
-				Reader:      response.Body,
-			})
-			fileMu.Unlock()
-		}(attachment)
+func HasAttachableMedia(msg *discordgo.Message) bool {
+	// Check our own message
+	if len(msg.Attachments) > 0 {
+		return true
 	}
 
-	fileWg.Wait()
+	for _, emb := range msg.Embeds {
+		if hasMedia(emb) {
+			return true
+		}
+	}
 
-	return files, closers
+	// Check any reply
+	if msg.ReferencedMessage != nil {
+		if len(msg.ReferencedMessage.Attachments) > 0 {
+			return true
+		}
+		for _, emb := range msg.ReferencedMessage.Embeds {
+			if hasMedia(emb) {
+				return true
+			}
+
+		}
+	}
+
+	return false
+}
+
+func hasMedia(emb *discordgo.MessageEmbed) bool {
+	if emb.Image != nil && emb.Image.URL != "" {
+		return true
+	}
+
+	if emb.Thumbnail != nil && emb.Thumbnail.URL != "" {
+		return true
+	}
+
+	return false
 }
