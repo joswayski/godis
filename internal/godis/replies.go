@@ -85,29 +85,28 @@ func shouldRefetchForEmbeds(msg *discordgo.Message) bool {
 func buildMessages(msg *discordgo.Message, isAssistant bool) openai.ChatCompletionMessageParamUnion {
 	content := msg.Content
 
-	// Don't format in this manner for our own bot messages otherwise replies
-	// tend to include the timestamp and user name when poasting
-	if !isAssistant {
+	if isAssistant {
+		// We don't support generating files yet
+		return openai.AssistantMessage(content)
+	} else {
+		// Don't format in this manner for our own bot messages otherwise replies
+		// tend to include the timestamp and user name when poasting
 		content = messages.GetContent(msg)
 	}
 
-	// Handle the no attachment scenario
-	if len(msg.Attachments) == 0 {
-		if isAssistant {
-			return openai.AssistantMessage(content)
-		}
-
+	// Handle the no attachment scenario and send the message directly
+	if !messages.HasAttachableMedia(msg) {
 		return openai.UserMessage(content)
 	}
 
 	// Handle messages with attachments
+
 	// First add the text / user / timestamp
 	parts := []openai.ChatCompletionContentPartUnionParam{
 		openai.TextContentPart(content),
 	}
 
 	// Now add our files, and any files in a reply
-	// TODO if any historical messages
 	parts = files.AttachFilesToMessage(parts, msg)
 
 	return openai.UserMessage(parts)
@@ -187,6 +186,7 @@ func (g *Godis) processBufferedMessages(s *discordgo.Session, channelId string) 
 	}
 
 	slog.Info(fmt.Sprintf("Sending ai request with %d messages", len(aiMessagesToSend)))
+	slog.Info("AI REQUEST", "messages", aiMessagesToSend)
 	// Set the messages and send it
 	aiParams.Messages = aiMessagesToSend
 	response, err := g.AIClient.Chat.Completions.New(context.TODO(), aiParams)

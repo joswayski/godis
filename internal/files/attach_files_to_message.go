@@ -13,13 +13,25 @@ import (
 func AttachFilesToMessage(aiMessageParts []openai.ChatCompletionContentPartUnionParam, msg *discordgo.Message) []openai.ChatCompletionContentPartUnionParam {
 	// Attach our own attachments
 	for _, att := range msg.Attachments {
-		aiMessageParts = attachFile(aiMessageParts, att, "Current message")
+		aiMessageParts = addAttachment(aiMessageParts, att, "Current message")
 	}
 
 	// Attach any reply attachments
 	if msg.ReferencedMessage != nil {
 		for _, att := range msg.ReferencedMessage.Attachments {
-			aiMessageParts = attachFile(aiMessageParts, att, "Referenced message")
+			aiMessageParts = addAttachment(aiMessageParts, att, "Referenced message")
+		}
+	}
+
+	// Attach our own embeds
+	for _, emb := range msg.Embeds {
+		aiMessageParts = addEmbed(aiMessageParts, emb, "Current message")
+	}
+
+	// Attach any reply embeds
+	if msg.ReferencedMessage != nil {
+		for _, emb := range msg.ReferencedMessage.Embeds {
+			aiMessageParts = addEmbed(aiMessageParts, emb, "Referenced message")
 		}
 	}
 
@@ -27,12 +39,12 @@ func AttachFilesToMessage(aiMessageParts []openai.ChatCompletionContentPartUnion
 
 }
 
-// Source is if the attachment is for the current message or a reply
-func attachmentLabel(att *discordgo.MessageAttachment, source string) string {
-	return fmt.Sprintf("%s attachment: %s (%s)", source, att.Filename, att.ContentType)
+// Source is if the file is for the current message or a reply
+func getAttachmentLabel(att *discordgo.MessageAttachment, source string) string {
+	return fmt.Sprintf("%s file: %s (%s)", source, att.Filename, att.ContentType)
 }
 
-func attachFile(aiMessageParts []openai.ChatCompletionContentPartUnionParam, att *discordgo.MessageAttachment, source string) []openai.ChatCompletionContentPartUnionParam {
+func addAttachment(aiMessageParts []openai.ChatCompletionContentPartUnionParam, att *discordgo.MessageAttachment, source string) []openai.ChatCompletionContentPartUnionParam {
 	slog.Info("Attachment", "filename", att.Filename, "content_type", att.ContentType, "url", att.URL)
 	contentType := normalizeContentType(att.ContentType)
 
@@ -42,7 +54,7 @@ func attachFile(aiMessageParts []openai.ChatCompletionContentPartUnionParam, att
 			return aiMessageParts
 		}
 
-		aiMessageParts = append(aiMessageParts, openai.TextContentPart(attachmentLabel(att, source)))
+		aiMessageParts = append(aiMessageParts, openai.TextContentPart(getAttachmentLabel(att, source)))
 		aiMessageParts = append(aiMessageParts, openai.ImageContentPart(openai.ChatCompletionContentPartImageImageURLParam{
 			URL:    att.URL,
 			Detail: "auto",
@@ -52,7 +64,7 @@ func attachFile(aiMessageParts []openai.ChatCompletionContentPartUnionParam, att
 	}
 
 	if strings.HasPrefix(contentType, "audio/") {
-		audioFormat, ok := getContentType(contentType)
+		audioFormat, ok := getAudioFormat(contentType)
 		if !ok {
 			slog.Warn("Unsupported audio content type", "name", att.Filename, "content_type", att.ContentType)
 			return aiMessageParts
@@ -65,7 +77,7 @@ func attachFile(aiMessageParts []openai.ChatCompletionContentPartUnionParam, att
 		}
 
 		b64 := base64.StdEncoding.EncodeToString(data)
-		aiMessageParts = append(aiMessageParts, openai.TextContentPart(attachmentLabel(att, source)))
+		aiMessageParts = append(aiMessageParts, openai.TextContentPart(getAttachmentLabel(att, source)))
 		aiMessageParts = append(aiMessageParts, openai.InputAudioContentPart(openai.ChatCompletionContentPartInputAudioInputAudioParam{
 			Data:   b64,
 			Format: audioFormat,
@@ -85,7 +97,7 @@ func attachFile(aiMessageParts []openai.ChatCompletionContentPartUnionParam, att
 		return aiMessageParts
 	}
 
-	aiMessageParts = append(aiMessageParts, openai.TextContentPart(attachmentLabel(att, source)))
+	aiMessageParts = append(aiMessageParts, openai.TextContentPart(getAttachmentLabel(att, source)))
 	aiMessageParts = append(aiMessageParts, openai.FileContentPart(openai.ChatCompletionContentPartFileFileParam{
 		FileData: openai.String(att.URL),
 		Filename: openai.String(att.Filename),
@@ -109,7 +121,7 @@ func isSupportedImageContentType(contentType string) bool {
 }
 
 // Returns the audio format expected by the model provider, if we can infer one.
-func getContentType(contentType string) (string, bool) {
+func getAudioFormat(contentType string) (string, bool) {
 	contentType = normalizeContentType(contentType)
 
 	switch contentType {
@@ -132,4 +144,29 @@ func getContentType(contentType string) (string, bool) {
 	default:
 		return "", false
 	}
+}
+
+func addEmbed(aiMessageParts []openai.ChatCompletionContentPartUnionParam, emb *discordgo.MessageEmbed, source string) []openai.ChatCompletionContentPartUnionParam {
+
+	if emb.Image != nil && emb.Image.URL != "" {
+		aiMessageParts = append(aiMessageParts,
+			openai.TextContentPart(fmt.Sprintf("%s embed image", source)),
+			openai.ImageContentPart(openai.ChatCompletionContentPartImageImageURLParam{
+				URL:    emb.Image.URL,
+				Detail: "auto",
+			}),
+		)
+	}
+
+	if emb.Thumbnail != nil && emb.Thumbnail.URL != "" {
+		aiMessageParts = append(aiMessageParts,
+			openai.TextContentPart(fmt.Sprintf("%s embed thumbnail", source)),
+			openai.ImageContentPart(openai.ChatCompletionContentPartImageImageURLParam{
+				URL:    emb.Thumbnail.URL,
+				Detail: "auto",
+			}),
+		)
+	}
+
+	return aiMessageParts
 }
