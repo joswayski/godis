@@ -24,7 +24,7 @@ func (g *Godis) HandleEmbeds(s *discordgo.Session, m *discordgo.MessageCreate) {
 	newMessage := m.Content
 	newMessage = xitterRegex.ReplaceAllString(newMessage, "https://vxtwitter.com$1")
 	newMessage = facebookRegex.ReplaceAllString(newMessage, "https://facebed.com$1")
-	newMessage = instagramRegex.ReplaceAllString(newMessage, "https://eeinstagram.com$1")
+	newMessage = instagramRegex.ReplaceAllString(newMessage, "https://kkinstagram.com$1")
 
 	godisWebhook, err := webhooks.GetGodisWebhook(s, m)
 	if err != nil {
